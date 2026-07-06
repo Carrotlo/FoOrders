@@ -1,0 +1,24 @@
+# Native dialog shown for order and item search when Paper Dialog API is available.
+# Valid placeholders: {current}, {target}. Default {target} is "Search".
+# Empty input clears search. Chat fallback uses FoPluginCore prompt text.
+title: "#03fc88Search"
+body: "#a7b8b0Type search text. Leave empty to clear."
+field-label: "#03fc88Search"
+initial-value: "{current}"
+placeholder: "diamond"
+confirm-button:
+  label: "#3ecf8eApply"
+  tooltip: "Apply search"
+  width: 100
+  icon: "spyglass"
+cancel-button:
+  label: "#ff5d73Cancel"
+  tooltip: "Keep current search"
+  width: 100
+  icon: "barrier"
+body-width: 320
+input-width: 300
+max-length: 128
+label-visible: true
+can-close-with-escape: true
+pause: false

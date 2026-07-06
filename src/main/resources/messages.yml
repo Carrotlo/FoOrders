@@ -1,0 +1,68 @@
+prefix: "#03fc88{plugin} &8» #a7b8b0"
+
+general:
+  only-players: "{prefix}Only players can use this command."
+  no-permission: "{prefix}You do not have permission to use this command."
+
+admin:
+  usage: "{prefix}Usage: #03fc88/{label} <reload|version|editor|history <player>>"
+  version-usage: "{prefix}Usage: #03fc88/{label} version"
+  reload-usage: "{prefix}Usage: #03fc88/{label} reload"
+  editor-usage: "{prefix}Usage: #03fc88/{label} editor"
+  history-usage: "{prefix}Usage: #03fc88/{label} history <player>"
+  version-author: "{prefix}Author: #03fc88{author}"
+  version-number: "{prefix}Version: #03fc88{version}"
+  economy-missing: "{prefix}#ff5d73Vault economy provider not found."
+  reload-success: "{prefix}#3ecf8e{plugin} config, messages, dialogs, and GUIs reloaded."
+  reload-failed: "{prefix}#ff5d73Reload failed at #03fc88{step}#ff5d73: #a7b8b0{error}"
+  editor-player-only: "{prefix}Only players can open the editor."
+  history-player-only: "{prefix}Only players can open history menus."
+  player-not-found: "{prefix}Player not found: #03fc88{player}"
+
+chat-input:
+  targets:
+    amount: "the Amount"
+    price: "the Price"
+    search: "the Search"
+
+native-dialogs:
+  fallback: "{prefix}#ff5d73Native dialogs are not supported on this server. #a7b8b0Using chat input fallback."
+
+actionbar:
+  invalid-amount: "#ff5d73Invalid amount. Try again."
+  not-enough-money: "#ff5d73Not enough money. Try again."
+  economy-error: "#ff5d73Economy unavailable. Try again later."
+  order-cancelled: "#ff5d73Order was cancelled."
+  order-blacklisted: "#ff5d73This item is blacklisted from orders."
+  custom-item-missing: "#ff5d73That custom item no longer exists."
+  enchant-required: "#ff5d73Select at least one enchant for books."
+  delivering: "#a7b8b0Delivering"
+
+history:
+  disabled: "{prefix}#ff5d73History is disabled."
+  disabled-config: "{prefix}#ff5d73History is disabled in config."
+  access-denied: "{prefix}#ff5d73You are not allowed to view history."
+  access-denied-player: "{prefix}#ff5d73You are not allowed to view that player's history."
+
+custom-items:
+  in-use: "{prefix}#ff5d73You cannot remove this item while active orders still use it."
+  removed: "{prefix}#3ecf8eRemoved custom item #03fc88{id}#3ecf8e."
+  hold-template: "{prefix}#ff5d73Hold the template item in your main hand first."
+  valid-template-required: "{prefix}#ff5d73Set a valid template item first."
+  save-failed: "{prefix}#ff5d73Could not save custom item: #a7b8b0{error}"
+  saved: "{prefix}#3ecf8eSaved custom item #03fc88{id}#3ecf8e."
+
+orders:
+  max-orders: "{prefix}#ff5d73You can only have #03fc88{amount} #ff5d73orders right now."
+  delivered: "{prefix}Items #03fc88Delivered#a7b8b0! You earned #3ecf8e${payout}"
+  owner-delivered: "{prefix}#03fc88{player} #a7b8b0delivered #03fc88{amount} #a7b8b0{item}"
+  owner-filled: "{prefix}Your #03fc88{item} #a7b8b0order was filled."
+  cancelled: "{prefix}#ff5d73Order was cancelled."
+  deleted-self: "{prefix}Deleted your #03fc88{order} #a7b8b0order."
+  deleted-other: "{prefix}Deleted #03fc88{owner}#a7b8b0's #03fc88{order} #a7b8b0order."
+  owner-deleted: "{prefix}#ff5d73Your #03fc88{order} #ff5d73order was deleted by #03fc88{admin}"
+  refunded: "{prefix}Refunded: #3ecf8e${amount}"
+  cancelled-self-admin: "{prefix}Cancelled your #03fc88{order} #a7b8b0order as admin."
+  cancelled-other-admin: "{prefix}Cancelled #03fc88{owner}#a7b8b0's #03fc88{order} #a7b8b0order."
+  owner-cancelled-admin: "{prefix}#ff5d73Your #03fc88{order} #ff5d73order was cancelled by #03fc88{admin}"
+  created-broadcast: "{prefix}#03fc88{player} #a7b8b0created an order for #03fc88{amount}x {item} #a7b8b0at #03fc88${price} #a7b8b0per item (#03fc88${total} #a7b8b0total)."

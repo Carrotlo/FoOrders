@@ -1,0 +1,25 @@
+# Native dialog shown for item amount input when Paper Dialog API is available.
+# Valid placeholders: {current}, {target}
+# Expected format: positive whole number. Compact suffixes like 1k are accepted.
+# Invalid values keep current behavior and return to the order GUI.
+title: "#03fc88Number Input"
+body: "#a7b8b0Type a positive whole number."
+field-label: "#03fc88Amount"
+initial-value: "{current}"
+placeholder: "64"
+confirm-button:
+  label: "#3ecf8eSave"
+  tooltip: "Set amount"
+  width: 120
+  icon: "emerald"
+cancel-button:
+  label: "#ff5d73Cancel"
+  tooltip: "Keep current amount"
+  width: 100
+  icon: "barrier"
+body-width: 320
+input-width: 240
+max-length: 16
+label-visible: true
+can-close-with-escape: true
+pause: false

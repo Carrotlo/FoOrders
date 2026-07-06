@@ -1,0 +1,30 @@
+name: FoOrders
+version: '${project.version}'
+main: me.foesio.foOrders.FoOrders
+api-version: '1.21'
+authors: [ Carrotio ]
+description: An actually well-made order system
+depend: [ Vault ]
+commands:
+  order:
+    description: Opens the orders menu
+    aliases: [ orders ]
+    usage: /order [<search>]
+    permission: foorders.use
+    permission-message: You do not have permission to use FoOrders.
+  orderadmin:
+    description: Admin command for FoOrders
+    aliases: [ ordersadmin ]
+    usage: /orderadmin <reload|version|editor|history <player>>
+    permission: foorders.admin
+    permission-message: You do not have permission to use this command.
+permissions:
+  foorders.use:
+    description: Allows using the /order menu
+    default: true
+  foorders.admin:
+    description: Allows using FoOrders admin commands and editor
+    default: op
+  foorders.maxorders.*:
+    description: Allows setting max order limits via foorders.maxorders.<amount>
+    default: op

@@ -1,0 +1,304 @@
+# Editable GUI text and button materials for FoOrders inventory menus.
+# Use #RRGGBB or & color codes. Dynamic placeholders are listed beside each item where supported.
+# Slot numbers are 0-based Minecraft inventory slots.
+titles:
+  main: "&8ᴏʀᴅᴇʀꜱ (Page {page})"
+  your-orders: "&8ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
+  new-order: "&8ɴᴇᴡ ᴏʀᴅᴇʀ"
+  item-select: "&8ꜱᴇʟᴇᴄᴛ ɪᴛᴇᴍ"
+  enchant-select: "&8ᴇɴᴄʜᴀɴᴛꜱ"
+  manage-order: "&8ᴍᴀɴᴀɢᴇ ᴏʀᴅᴇʀ"
+  claim-order: "&8ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
+  deliver: "&8ᴅᴇʟɪᴠᴇʀ"
+  delivery-confirm: "&8ᴄᴏɴꜰɪʀᴍᴀᴛɪᴏɴ"
+  history: "&8ʜɪꜱᴛᴏʀʏ • {tab}"
+
+labels:
+  main-sort-options:
+    - "Most Paid"
+    - "Most Delivered"
+    - "Recently Listed"
+    - "Most Money Per Item"
+  item-sort-options:
+    - "A-Z"
+    - "Z-A"
+  filter-options:
+    - "All"
+    - "Blocks"
+    - "Tools"
+    - "Food"
+    - "Combat"
+    - "Potions"
+    - "Books"
+    - "Ingredients"
+    - "Utilities"
+
+layout:
+  main:
+    # Dynamic order entry slots. 0-based inventory slots.
+    # Default: rows 2-4, columns 2-8. First and last column stay filler panes.
+    order-slots:
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+
+buttons:
+  # Shared button appearance for public FoOrders inventory menus.
+  # Per-menu slot placement stays under items.<menu>.<button>.slot.
+  back:
+    material: IRON_DOOR
+    name: "#03fc88ʙᴀᴄᴋ"
+    lore:
+      - "#ffffffClick to return"
+  previous-page:
+    material: ARROW
+    name: "#03fc88ᴘʀᴇᴠɪᴏᴜꜱ ᴘᴀɢᴇ"
+    lore:
+      - "#ffffffPage {page}/{max_page}"
+  next-page:
+    material: ARROW
+    name: "#03fc88ɴᴇxᴛ ᴘᴀɢᴇ"
+    lore:
+      - "#ffffffPage {page}/{max_page}"
+  search:
+    material: NAME_TAG
+    name: "#03fc88ꜱᴇᴀʀᴄʜ"
+    lore:
+      - "#ffffffCurrent: {current}"
+      - "#ffffffClick to search"
+
+items:
+  # Shared back/page/search button appearance is controlled by the buttons section above.
+  # These entries only keep per-menu slot placement here.
+  main:
+    gray-pane:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ""
+    black-pane:
+      material: GRAY_STAINED_GLASS_PANE
+      name: ""
+    empty-order-slot:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: ""
+    order-entry:
+      # Dynamic item shown for every order profile in /order, /order -> Your Orders, and admin previews.
+      # The icon stays the ordered item. These settings only change the visible name/lore text.
+      # Placeholders: {owner}, {item}, {material}, {amount}, {amount_ordered}, {delivered}, {amount_delivered}, {amount_left}, {price}, {price_each}, {total}, {paid}, {paid_left}
+      # {price} and {price_each} both mean the per-item price without a dollar sign, so use ${price} if you want "$10 each".
+      name: "#03fc88{owner}'s Order"
+      lore:
+        # Amount line for the ordered item.
+        amount: "#03fc88{amount} #ffffff{item}"
+        # Per-item price line. Change "each" here if you want different wording.
+        price: "#03fc88${price} #ffffffeach"
+        # Shown only when the order has enchantments.
+        enchants-title: "#a7b8b0Enchants"
+        # Delivered progress line.
+        delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
+        # Paid progress line.
+        paid: "#a7b8b0${paid}/#3ecf8e${total} #a7b8b0Paid"
+    previous-page:
+      slot: 45
+    next-page:
+      slot: 53
+    sort:
+      slot: 47
+      material: CAULDRON
+      name: "#03fc88ꜱᴏʀᴛ"
+    filter:
+      slot: 48
+      material: HOPPER
+      name: "#03fc88ꜰɪʟᴛᴇʀ"
+    refresh:
+      slot: 49
+      material: MAP
+      name: "#03fc88ᴏʀᴅᴇʀꜱ"
+      lore:
+        - "#ffffffClick to refresh"
+    search:
+      slot: 50
+    your-orders:
+      slot: 51
+      material: BOOK
+      name: "#03fc88ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
+      lore:
+        - "#ffffffClick to view your orders"
+    history:
+      slot: 52
+      material: WRITABLE_BOOK
+      name: "#03fc88ʜɪꜱᴛᴏʀʏ"
+      lore:
+        - "#ffffffClick to view order history"
+        - "#ffffffSwitch between order and deliver tabs"
+
+  your-orders:
+    new-order:
+      slot: 26
+      material: MAP
+      name: "#03fc88New Order"
+      lore:
+        - "#ffffffClick to create new order"
+
+  new-order:
+    cancel:
+      slot: 10
+      material: RED_STAINED_GLASS_PANE
+      name: "#ff5d73ᴄᴀɴᴄᴇʟ"
+      lore:
+        - "#ffffffClick to return"
+    item:
+      slot: 12
+      name: "#03fc88ɪᴛᴇᴍ"
+    amount:
+      slot: 13
+      material: CHEST
+      name: "#03fc88ᴀᴍᴏᴜɴᴛ"
+      lore:
+        - "#ffffffClick to type number of items"
+        - "#a7b8b0({amount})"
+    price:
+      slot: 14
+      material: EMERALD
+      name: "#03fc88ᴘʀɪᴄᴇ"
+      lore:
+        - "#ffffffClick to type the price per item"
+        - "#a7b8b0(${price})"
+    enchants:
+      slot: 15
+      material: ENCHANTED_BOOK
+      name: "#03fc88ᴇɴᴄʜᴀɴᴛꜱ"
+    confirm:
+      slot: 16
+      material: LIME_STAINED_GLASS_PANE
+      name: "#3ecf8eᴄᴏɴꜰɪʀᴍ"
+      lore:
+        - "#ffffffClick to confirm order"
+        - "#a7b8b0Subtotal: #03fc88${subtotal}"
+        - "#a7b8b0Tax ({tax_percent}%): #03fc88${tax}"
+        - "#a7b8b0Total: #3ecf8e${total}"
+
+  item-select:
+    sort:
+      slot: 48
+      material: CAULDRON
+      name: "#03fc88ꜱᴏʀᴛ"
+    filter:
+      slot: 49
+      material: HOPPER
+      name: "#03fc88ꜰɪʟᴛᴇʀ"
+    search:
+      slot: 50
+    previous-page:
+      slot: 45
+    next-page:
+      slot: 53
+
+  enchant-select:
+    previous-page:
+      slot: 45
+    next-page:
+      slot: 53
+    clear:
+      slot: 48
+      material: RED_TERRACOTTA
+      name: "#ff5d73ᴄʟᴇᴀʀ"
+      lore:
+        - "#ffffffClick to remove all selected enchantments"
+    done:
+      slot: 49
+      material: LIME_STAINED_GLASS_PANE
+      name: "#3ecf8eᴅᴏɴᴇ"
+      lore:
+        - "#ffffffClick to return"
+        - "#a7b8b0({selected} selected)"
+    controls:
+      slot: 50
+      material: OAK_SIGN
+      name: "#03fc88ᴄᴏɴᴛʀᴏʟꜱ"
+      lore:
+        - "#ffffffLeft click: +1 level"
+        - "#ffffffRight click: -1 level"
+        - "#ffffffShift + Left: +5 levels"
+        - "#ffffffShift + Right: -5 levels"
+
+  manage-order:
+    cancel:
+      slot: 11
+      material: RED_TERRACOTTA
+      name: "#ff5d73ᴄᴀɴᴄᴇʟ"
+      lore:
+        - "#ffffffClick to cancel your order"
+    claim:
+      slot: 14
+      material: CHEST
+      name: "#3ecf8eᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
+
+  claim-order:
+    previous-page:
+      slot: 45
+    next-page:
+      slot: 53
+    drop-page:
+      slot: 52
+      material: DISPENSER
+      name: "#a7b8b0ᴅʀᴏᴘ ᴘᴀɢᴇ"
+      lore:
+        - "#ffffffDrop all items on the page"
+
+  delivery-confirm:
+    cancel:
+      slot: 11
+      material: RED_STAINED_GLASS_PANE
+      name: "#ff5d73ᴄᴀɴᴄᴇʟ"
+      lore:
+        - "#ffffffClick to return"
+    confirm:
+      slot: 15
+      material: LIME_STAINED_GLASS_PANE
+      name: "#3ecf8eᴄᴏɴꜰɪʀᴍ"
+      lore:
+        - "#ffffffClick to confirm order"
+
+  history:
+    info:
+      slot: 46
+      material: OAK_SIGN
+      name: "#03fc88ᴠɪᴇᴡɪɴɢ"
+      lore:
+        - "#ffffff{target}"
+        - "#a7b8b0Page {page}/{pages}"
+        - "#a7b8b0Entries: {entries}"
+    order-tab:
+      slot: 48
+    deliver-tab:
+      slot: 50
+    back-to-orders:
+      slot: 49
+    previous-page:
+      slot: 45
+    next-page:
+      slot: 53
+    entry:
+      name: "#03fc88{action}"
+      lore:
+        - "#ffffff{details}"
+        - "#a7b8b0Player: {target}"
+        - "#a7b8b0Time: {time}"

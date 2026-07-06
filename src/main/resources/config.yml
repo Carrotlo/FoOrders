@@ -1,0 +1,75 @@
+# Visible plugin name used in prefixes, update notices, and default webhook display names.
+# This does not change plugin.yml command names or permissions.
+plugin-title: "FoOrders"
+
+# Default maximum orders a player can have.
+max-order-per-player: 3
+
+# Minimum time between repeated /order menu opens from the same player.
+# Set to 0 to disable the cooldown.
+order-menu-refresh-cooldown-ms: 50
+
+# Extra percentage charged when a player creates a new order.
+# This is a one-time creation tax and is not paid to deliverers or refunded when the order is cancelled.
+order-tax:
+  percentage: 0
+
+# File logging works like debug mode and saves plugin activity to logs/latest.log. Default: false
+file-logging: false
+
+# Uses Minecraft's native dialog/input screens for search and text/number input when supported.
+# Requires a compatible Paper or Paper-fork server with the Dialog API.
+# Spigot and older versions automatically fall back to chat input mode.
+# Set this to false to always use chat input mode.
+native-dialogs:
+  enabled: true
+  # Sends admins one warning when native dialogs are enabled but unavailable and the plugin falls back.
+  warn-on-fallback: true
+
+# Broadcast a global chat message when a new order is created.
+announce-created-orders-in-chat: false
+
+history:
+  # Master switch for all history recording and viewing.
+  enabled: true
+  # Allows normal players to open their own history from the main orders GUI.
+  players-can-view-own: true
+  # Allows admins to open any player's history with /orderadmin history <player>.
+  admins-can-view-any: true
+  # Maximum stored entries per history type (order/deliver) for each player.
+  max-entries-per-type: 100
+
+discord-webhook:
+  # Master switch for all webhook messages.
+  enabled: true
+
+  # Discord webhook URL (for example: https://discord.com/api/webhooks/<id>/<token>)
+  # If this is empty or invalid, the plugin simply skips webhook sending.
+  webhook-url: ""
+
+  # Webhook display name. Leave blank to use plugin-title.
+  username: ""
+
+  # Optional webhook avatar image URL.
+  avatar-url: ""
+
+  # Logs the first webhook send failure until a later send succeeds.
+  log-failures: true
+
+  # Enable/disable each webhook category.
+  # Defaults are enabled for creating/cancelling/admin moderation.
+  events:
+    creating-orders: true
+    cancelling-orders: true
+    delivering-orders: false
+    claiming-orders: false
+    admin-cancelling-or-deleting: true
+
+# Materials that cannot be ordered.
+# Supports names like "barrier" or "minecraft:barrier".
+blacklist-items:
+  - barrier
+
+# Display names that cannot be ordered (checked independently from material blacklist).
+blacklist-names:
+  - test_blacklisted_name
