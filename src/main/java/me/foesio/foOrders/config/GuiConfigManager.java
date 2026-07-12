@@ -36,11 +36,12 @@ public final class GuiConfigManager {
         "#a7b8b0(Total: ${total})"
     );
     private static final String TAX_DISCLOSURE_LORE = "#a7b8b0Tax ({tax_percent}%): #03fc88${tax}";
-    private static final List<String> REMOVED_ADMIN_GUI_PATHS = List.of(
+    private static final List<String> REMOVED_GUI_PATHS = List.of(
         "titles.admin-actions",
         "titles.admin-item-editor",
         "titles.admin-item-edit",
         "items.main.order-entry.lore.admin-cancel",
+        "items.main.order-entry.lore.enchants-title",
         "items.manage-order.admin-actions",
         "items.admin-actions",
         "items.admin-item-editor",
@@ -80,7 +81,7 @@ public final class GuiConfigManager {
                 boolean changed = migrateLegacyButtonsFile(loaded);
                 changed |= backfillMissingDefaults(loaded, defaults);
                 changed |= backfillNewOrderConfirmTaxLore(loaded, defaults);
-                changed |= removeAdminOnlyGuiPaths(loaded);
+                changed |= removeRemovedGuiPaths(loaded);
                 if (changed) {
                     loaded.save(file);
                 }
@@ -309,9 +310,9 @@ public final class GuiConfigManager {
         return changed;
     }
 
-    private boolean removeAdminOnlyGuiPaths(YamlConfiguration loaded) {
+    private boolean removeRemovedGuiPaths(YamlConfiguration loaded) {
         boolean changed = false;
-        for (String path : REMOVED_ADMIN_GUI_PATHS) {
+        for (String path : REMOVED_GUI_PATHS) {
             if (!loaded.isSet(path)) {
                 continue;
             }

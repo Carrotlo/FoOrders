@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +30,8 @@ public final class FoOrdersDialogInputService {
 
     private NativeDialogSupport support;
     private DialogInputs inputs;
+    private EnchantDialogConfig enchantDialogConfig;
+    private FoOrdersEnchantDialogService enchantDialogService;
 
     public FoOrdersDialogInputService(FoOrders plugin, FoScheduler scheduler, FoFileLogger fileLogger) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -43,17 +46,22 @@ public final class FoOrdersDialogInputService {
     }
 
     public void reloadDialogs() {
+        ensureEnchantDialogFile();
         migrateLegacyDialogFiles();
+        migrateEnchantDialogDefaults();
         dialogs.reload();
+        enchantDialogConfig = loadEnchantDialogConfig();
     }
 
     public void reloadSupport() {
         closeDialogInputs();
+        enchantDialogService = null;
         support = NativeDialogSupport.detect(
             plugin,
             NativeDialogSettings.fromConfig(plugin.getConfig().getConfigurationSection("native-dialogs"))
         );
         inputs = DialogInputs.create(plugin, support, scheduler);
+        enchantDialogService = createEnchantDialogService();
         logDialogMode();
     }
 
@@ -100,6 +108,24 @@ public final class FoOrdersDialogInputService {
 
     public boolean willUseFallback() {
         return nativeEnabled() && (support == null || !support.canUseNativeDialogs() || inputs == null);
+    }
+
+    public boolean openEnchantSelection(
+        Player player,
+        EnchantDialogRequest request,
+        Consumer<EnchantDialogAction> onAction
+    ) {
+        FoOrdersEnchantDialogService currentService = enchantDialogService;
+        if (player == null
+            || !player.isOnline()
+            || request == null
+            || onAction == null
+            || support == null
+            || !support.canUseNativeDialogs()
+            || currentService == null) {
+            return false;
+        }
+        return currentService.open(player, request, onAction);
     }
 
     private TextDialogRequest request(SignInputType inputType, String currentValue, String targetLabel) {
@@ -156,6 +182,77 @@ public final class FoOrdersDialogInputService {
         migrateLegacyDialogFile("amount", fallbackRequest(SignInputType.AMOUNT, "{current}", "{target}"));
         migrateLegacyDialogFile("money", fallbackRequest(SignInputType.PRICE, "{current}", "{target}"));
         migrateLegacyDialogFile("search", fallbackRequest(SignInputType.MAIN_SEARCH, "{current}", "{target}"));
+    }
+
+    private void ensureEnchantDialogFile() {
+        File file = new File(plugin.getDataFolder(), "dialogs" + File.separator + "enchant-select.yml");
+        if (file.exists()) {
+            return;
+        }
+        try {
+            plugin.saveResource("dialogs/enchant-select.yml", false);
+        } catch (IllegalArgumentException exception) {
+            warn("Could not create enchant dialog config: " + exception.getMessage());
+        }
+    }
+
+    private EnchantDialogConfig loadEnchantDialogConfig() {
+        File file = new File(plugin.getDataFolder(), "dialogs" + File.separator + "enchant-select.yml");
+        FileConfiguration config = file.exists() ? YamlConfiguration.loadConfiguration(file) : new YamlConfiguration();
+        return EnchantDialogConfig.load(config);
+    }
+
+    private void migrateEnchantDialogDefaults() {
+        File file = new File(plugin.getDataFolder(), "dialogs" + File.separator + "enchant-select.yml");
+        if (!file.exists()) {
+            return;
+        }
+
+        FileConfiguration config = YamlConfiguration.loadConfiguration(file);
+        boolean changed = false;
+        changed |= replaceStringIfDefault(config, "continue-button.label", "#a7b8b0Skip Enchantments", "#3ecf8eConfirm");
+        changed |= replaceStringIfDefault(config, "continue-button.tooltip", "Return to the order setup", "Confirm enchantments");
+        changed |= replaceStringIfDefault(config, "continue-button.icon", "barrier", "emerald");
+        changed |= replaceStringIfDefault(config, "title-icon", "warning", "experience_bottle");
+        changed |= replaceIntIfDefault(config, "item.width", 64, 16);
+        changed |= replaceIntIfDefault(config, "item.height", 64, 16);
+        changed |= replaceIntIfDefault(config, "item.width", 32, 16);
+        changed |= replaceIntIfDefault(config, "item.height", 32, 16);
+        changed |= replaceIntIfDefault(config, "enchant-button.width", 180, 144);
+        changed |= replaceIntIfDefault(config, "level-button.width", 32, 36);
+        changed |= replaceIntIfDefault(config, "level-button.width", 24, 36);
+        changed |= removeIfSet(config, "page-size");
+        changed |= removeIfSet(config, "previous-page-button");
+        changed |= removeIfSet(config, "next-page-button");
+        if (!changed) {
+            return;
+        }
+        try {
+            config.save(file);
+        } catch (IOException exception) {
+            warn("Could not migrate enchant dialog config " + file.getName() + ": " + exception.getMessage());
+        }
+    }
+
+    private FoOrdersEnchantDialogService createEnchantDialogService() {
+        EnchantDialogConfig currentConfig = enchantDialogConfig;
+        if (support == null || currentConfig == null || !currentConfig.enabled() || !support.canUseNativeDialogs()) {
+            return null;
+        }
+        try {
+            Class<?> serviceClass = Class.forName("me.foesio.foOrders.dialog.FoOrdersPaperEnchantDialogService");
+            Constructor<?> constructor = serviceClass.getConstructor(
+                FoOrders.class,
+                NativeDialogSupport.class,
+                FoScheduler.class,
+                EnchantDialogConfig.class
+            );
+            return (FoOrdersEnchantDialogService) constructor.newInstance(plugin, support, scheduler, currentConfig);
+        } catch (ReflectiveOperationException | LinkageError | ClassCastException exception) {
+            support.disableForSession("FoOrders enchant dialog unavailable: " + exception.getMessage());
+            warn("Native enchant dialog unavailable. Using inventory fallback: " + exception.getMessage());
+            return null;
+        }
     }
 
     private void migrateLegacyDialogFile(String id, TextDialogRequest fallback) {
@@ -228,6 +325,14 @@ public final class FoOrdersDialogInputService {
             return false;
         }
         config.set(path, newValue);
+        return true;
+    }
+
+    private boolean removeIfSet(FileConfiguration config, String path) {
+        if (!config.isSet(path)) {
+            return false;
+        }
+        config.set(path, null);
         return true;
     }
 

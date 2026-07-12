@@ -2,6 +2,10 @@ package me.foesio.foOrders;
 
 import me.foesio.foOrders.config.GuiConfigManager;
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.foOrders.dialog.EnchantDialogAction;
+import me.foesio.foOrders.dialog.EnchantDialogRequest;
+import me.foesio.foOrders.dialog.EnchantDialogRow;
+import me.foesio.foOrders.dialog.FoOrdersDialogInputService;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
@@ -17,6 +21,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,6 +32,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import static me.foesio.foOrders.OrdersMenuManager.*;
 
 final class OrdersMenuViewSupport {
+    private static final long NATIVE_DIALOG_CLOSE_SUPPRESSION_TICKS = 5L;
+
     private final OrdersMenuManager manager;
     private final FoScheduler scheduler;
     private final DateTimeFormatter historyTimestampFormatter;
@@ -254,8 +261,8 @@ final class OrdersMenuViewSupport {
         return manager.itemSupport.supportsOrderEnchantments(customItemId, material);
     }
 
-    private List<String> buildEnchantmentSummaryLore(Map<String, Integer> enchantments, int maxLines) {
-        return manager.itemSupport.buildEnchantmentSummaryLore(enchantments, maxLines);
+    private List<String> buildFullEnchantmentSummaryLore(Map<String, Integer> enchantments) {
+        return manager.itemSupport.buildFullEnchantmentSummaryLore(enchantments);
     }
 
     private List<OrderableItemOption> getFilteredSortedItems(ItemSelectState itemSelectState) {
@@ -276,6 +283,10 @@ final class OrdersMenuViewSupport {
 
     private ItemStack createEnchantSelectionItem(Material material, Enchantment enchantment, int selectedLevel) {
         return manager.itemSupport.createEnchantSelectionItem(material, enchantment, selectedLevel);
+    }
+
+    private String formatEnchantmentName(Enchantment enchantment) {
+        return manager.itemSupport.formatEnchantmentName(enchantment);
     }
 
     private String resolvePlayerName(UUID playerId) {
@@ -486,15 +497,10 @@ final class OrdersMenuViewSupport {
         if (supportsOrderEnchantments(draft.customItemId(), selectedMaterial)) {
             List<String> enchantLore = new ArrayList<>();
             enchantLore.add(WHITE + "Click to edit enchantments");
-            if (sanitizedEnchantments.isEmpty()) {
-                enchantLore.add(MUTED + "(None selected)");
-            } else {
-                enchantLore.add(MUTED + "(" + formatCompactAmount(sanitizedEnchantments.size()) + " selected)");
-                enchantLore.addAll(buildEnchantmentSummaryLore(sanitizedEnchantments, 2));
+            if (!sanitizedEnchantments.isEmpty()) {
+                enchantLore.addAll(buildFullEnchantmentSummaryLore(sanitizedEnchantments));
             }
-            menu.setItem(enchantSlot, createGuiItem("new-order.enchants", Material.ENCHANTED_BOOK, LIGHT_ACCENT + "ᴇɴᴄʜᴀɴᴛꜱ", enchantLore, TextFormat.placeholders(
-                "selected", formatCompactAmount(sanitizedEnchantments.size())
-            )));
+            menu.setItem(enchantSlot, createGuiItem("new-order.enchants", Material.ENCHANTED_BOOK, LIGHT_ACCENT + "ᴇɴᴄʜᴀɴᴛꜱ", enchantLore));
         }
 
         double subtotal = draft.amount() * draft.pricePerItem();
@@ -592,6 +598,10 @@ final class OrdersMenuViewSupport {
         }
 
         List<Enchantment> enchantments = getSelectableEnchantments(material);
+        if (tryOpenEnchantDialog(player, viewState, draft, material, sanitizedEnchantments, enchantments)) {
+            return;
+        }
+
         int pageCount = Math.max(1, (int) Math.ceil(enchantments.size() / (double) ENCHANT_SELECT_PAGE_SIZE));
         if (viewState.enchantPage < 1) {
             viewState.enchantPage = 1;
@@ -647,6 +657,139 @@ final class OrdersMenuViewSupport {
             ))
         );
         openMenu(player, menu);
+    }
+
+    private boolean tryOpenEnchantDialog(
+        Player player,
+        MenuViewState viewState,
+        NewOrderDraft draft,
+        Material material,
+        Map<String, Integer> selectedEnchantments,
+        List<Enchantment> enchantments
+    ) {
+        FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
+        if (dialogInputService == null || !dialogInputService.nativeEnabled()) {
+            return false;
+        }
+
+        EnchantDialogRequest request = createEnchantDialogRequest(
+            draft,
+            material,
+            selectedEnchantments,
+            enchantments
+        );
+        boolean suppressInventoryClose = manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
+        if (suppressInventoryClose) {
+            manager.inventoryCloseSuppressor.suppressNextClose(player);
+        }
+
+        boolean opened = dialogInputService.openEnchantSelection(
+            player,
+            request,
+            action -> handleEnchantDialogAction(player, action)
+        );
+        if (opened) {
+            if (suppressInventoryClose) {
+                scheduler.runLaterForPlayer(
+                    player,
+                    () -> manager.inventoryCloseSuppressor.clear(player),
+                    NATIVE_DIALOG_CLOSE_SUPPRESSION_TICKS
+                );
+            }
+            return true;
+        }
+
+        if (suppressInventoryClose) {
+            manager.inventoryCloseSuppressor.clear(player);
+        }
+        return false;
+    }
+
+    private EnchantDialogRequest createEnchantDialogRequest(
+        NewOrderDraft draft,
+        Material material,
+        Map<String, Integer> selectedEnchantments,
+        List<Enchantment> enchantments
+    ) {
+        CustomItemStore.CustomItemDefinition customSelection = resolveCustomItemDefinition(draft.customItemId());
+        ItemStack displayItem = customSelection == null ? new ItemStack(material) : customSelection.template().clone();
+        if (displayItem.getType() == Material.AIR) {
+            displayItem = new ItemStack(material);
+        }
+        displayItem.setAmount(1);
+
+        String itemName = customSelection == null
+            ? formatMaterialName(material)
+            : resolveTemplateDisplayName(customSelection.template());
+        List<EnchantDialogRow> rows = new ArrayList<>();
+        for (Enchantment enchantment : enchantments) {
+            String key = enchantment.getKey().toString();
+            rows.add(new EnchantDialogRow(
+                key,
+                formatEnchantmentName(enchantment),
+                Math.max(1, enchantment.getMaxLevel()),
+                selectedEnchantments.getOrDefault(key, 0),
+                enchantment.isCursed()
+            ));
+        }
+
+        return new EnchantDialogRequest(
+            material,
+            displayItem,
+            itemName,
+            rows,
+            selectedEnchantments.size()
+        );
+    }
+
+    private void handleEnchantDialogAction(Player player, EnchantDialogAction action) {
+        if (action == null) {
+            return;
+        }
+
+        MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
+        NewOrderDraft draft = viewState.getOrCreateDraft();
+        Material material = resolveDraftMaterial(draft);
+        if (!supportsOrderEnchantments(draft.customItemId(), material)) {
+            openNewOrderMenu(player);
+            return;
+        }
+
+        switch (action.type()) {
+            case BACK_TO_ITEMS -> openItemSelectMenu(player, false);
+            case CONTINUE_ORDER -> openNewOrderMenu(player);
+            case SET_LEVEL -> updateDialogEnchantLevel(player, viewState, draft, material, action.enchantmentKey(), action.level());
+        }
+    }
+
+    private void updateDialogEnchantLevel(
+        Player player,
+        MenuViewState viewState,
+        NewOrderDraft draft,
+        Material material,
+        String enchantmentKey,
+        int requestedLevel
+    ) {
+        Enchantment selected = manager.itemSupport.resolveEnchantment(enchantmentKey);
+        if (selected == null || !getSelectableEnchantments(material).contains(selected)) {
+            openEnchantSelectMenu(player, false);
+            return;
+        }
+
+        int maxLevel = Math.max(1, selected.getMaxLevel());
+        int newLevel = Math.max(0, Math.min(maxLevel, requestedLevel));
+        Map<String, Integer> updatedEnchantments =
+            new LinkedHashMap<>(sanitizeDraftEnchantments(draft.customItemId(), material, draft.enchantLevels()));
+        String key = selected.getKey().toString();
+        int currentLevel = updatedEnchantments.getOrDefault(key, 0);
+        if (newLevel <= 0 || currentLevel == newLevel) {
+            updatedEnchantments.remove(key);
+        } else {
+            updatedEnchantments.put(key, newLevel);
+        }
+
+        viewState.draft = draft.withEnchantLevels(updatedEnchantments);
+        openEnchantSelectMenu(player, false);
     }
 
     void openManageOrderMenu(Player player, int orderIndex) {

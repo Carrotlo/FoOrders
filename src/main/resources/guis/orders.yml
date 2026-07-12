@@ -109,8 +109,6 @@ items:
         amount: "#03fc88{amount} #ffffff{item}"
         # Per-item price line. Change "each" here if you want different wording.
         price: "#03fc88${price} #ffffffeach"
-        # Shown only when the order has enchantments.
-        enchants-title: "#a7b8b0Enchants"
         # Delivered progress line.
         delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
         # Paid progress line.

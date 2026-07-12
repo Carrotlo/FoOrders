@@ -93,14 +93,6 @@ final class OrdersMenuItemSupport {
             ACCENT + "$" + price + " " + WHITE + "each",
             placeholders
         ));
-        if (!order.getEnchantments().isEmpty()) {
-            lore.add(guiText(
-                "items.main.order-entry.lore.enchants-title",
-                MUTED + "Enchants",
-                placeholders
-            ));
-            lore.addAll(buildEnchantmentSummaryLore(order.getEnchantments(), 3));
-        }
         lore.add("");
         lore.add(guiText(
             "items.main.order-entry.lore.delivered",
@@ -461,27 +453,17 @@ final class OrdersMenuItemSupport {
         return item;
     }
 
-    List<String> buildEnchantmentSummaryLore(Map<String, Integer> enchantments, int maxLines) {
-        if (enchantments == null || enchantments.isEmpty() || maxLines <= 0) {
+    List<String> buildFullEnchantmentSummaryLore(Map<String, Integer> enchantments) {
+        if (enchantments == null || enchantments.isEmpty()) {
             return List.of();
         }
 
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(enchantments.entrySet());
         entries.sort(Comparator.comparing(entry -> formatEnchantmentName(entry.getKey()), String.CASE_INSENSITIVE_ORDER));
-        List<String> summary = new ArrayList<>();
-        int shown = Math.min(maxLines, entries.size());
-        for (int i = 0; i < shown; i++) {
-            Map.Entry<String, Integer> enchantEntry = entries.get(i);
+        List<String> summary = new ArrayList<>(entries.size());
+        for (Map.Entry<String, Integer> enchantEntry : entries) {
             int level = Math.max(1, enchantEntry.getValue());
-            summary.add(
-                LIGHT_GRAY + "- " + formatEnchantmentName(enchantEntry.getKey()) + " "
-                    + toRomanNumeral(level) + " (" + level + ")"
-            );
-        }
-
-        int hidden = entries.size() - shown;
-        if (hidden > 0) {
-            summary.add(LIGHT_GRAY + "And " + hidden + " more");
+            summary.add(LIGHT_GRAY + "- " + formatEnchantmentName(enchantEntry.getKey()) + " " + toRomanNumeral(level));
         }
         return summary;
     }
