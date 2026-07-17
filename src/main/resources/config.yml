@@ -1,6 +1,4 @@
-# Visible plugin name used in prefixes, update notices, and default webhook display names.
-# This does not change plugin.yml command names or permissions.
-plugin-title: "FoOrders"
+# Need help or want support? Join the Discord: https://discord.gg/kEF77QCfu7
 
 # Default maximum orders a player can have.
 max-order-per-player: 3
@@ -47,7 +45,7 @@ discord-webhook:
   # If this is empty or invalid, the plugin simply skips webhook sending.
   webhook-url: ""
 
-  # Webhook display name. Leave blank to use plugin-title.
+  # Webhook display name. Leave blank to use FoOrders.
   username: ""
 
   # Optional webhook avatar image URL.

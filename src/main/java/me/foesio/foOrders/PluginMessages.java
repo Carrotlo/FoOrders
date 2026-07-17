@@ -1,7 +1,6 @@
 package me.foesio.foOrders;
 
 import me.foesio.core.message.FoStyle;
-import me.foesio.core.plugin.FoPluginTitle;
 import me.foesio.core.text.FoText;
 import me.foesio.foOrders.util.TextFormat;
 import net.md_5.bungee.api.chat.BaseComponent;
@@ -143,7 +142,7 @@ public final class PluginMessages {
     }
 
     private Map<String, String> tokenValues() {
-        Map<String, String> tokens = new LinkedHashMap<>(FoStyle.runtimeTokens(FoPluginTitle.resolve(plugin)));
+        Map<String, String> tokens = new LinkedHashMap<>(FoStyle.runtimeTokens(plugin.getName()));
         tokens.put("prefix", messages.getString("prefix", tokens.getOrDefault("prefix", "")));
 
         ConfigurationSection section = messages.getConfigurationSection("tokens");

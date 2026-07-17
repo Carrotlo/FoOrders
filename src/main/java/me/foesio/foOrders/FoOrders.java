@@ -2,11 +2,9 @@ package me.foesio.foOrders;
 
 import me.foesio.core.FoCoreContext;
 import me.foesio.core.FoPluginCore;
-import me.foesio.core.config.FoConfigDefaults;
 import me.foesio.core.dialog.NativeDialogConfigDefaults;
 import me.foesio.core.discord.DiscordWebhookConfigDefaults;
 import me.foesio.core.logging.FoFileLogger;
-import me.foesio.core.plugin.FoPluginTitle;
 import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.scheduler.FoScheduler;
@@ -28,10 +26,13 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
 public final class FoOrders extends JavaPlugin {
+    private static final String DISPLAY_NAME = "FoOrders";
+    private static final String LEGACY_PLUGIN_TITLE_PATH = "plugin-title";
     private static final String MODRINTH_PROJECT_ID = "foorders";
     private static final int BSTATS_PLUGIN_ID = 32420;
 
@@ -106,14 +107,20 @@ public final class FoOrders extends JavaPlugin {
         return core.createUpdateNotices(new UpdateNoticeService.UpdateMessenger() {
             @Override
             public void send(CommandSender sender, String template, Map<String, String> placeholders) {
-                messages.sendTemplate(sender, template, placeholders);
+                messages.sendTemplate(sender, template, fixedPluginPlaceholders(placeholders));
             }
 
             @Override
             public void sendClickable(CommandSender sender, String template, String url, Map<String, String> placeholders) {
-                messages.sendClickableTemplate(sender, template, url, placeholders);
+                messages.sendClickableTemplate(sender, template, url, fixedPluginPlaceholders(placeholders));
             }
         }, MODRINTH_PROJECT_ID).start();
+    }
+
+    private Map<String, String> fixedPluginPlaceholders(Map<String, String> placeholders) {
+        Map<String, String> fixedPlaceholders = new LinkedHashMap<>(placeholders == null ? Map.of() : placeholders);
+        fixedPlaceholders.put("plugin", DISPLAY_NAME);
+        return fixedPlaceholders;
     }
 
     @Override
@@ -148,22 +155,29 @@ public final class FoOrders extends JavaPlugin {
     public void ensureConfigDefaults() {
         FileConfiguration config = getConfig();
         boolean changed = backfillConfigDefaults(config);
+        changed |= removeLegacyPluginTitle(config);
         changed |= setDefaultIfMissing(config, "max-order-per-player", 3);
         changed |= setDefaultIfMissing(config, "order-menu-refresh-cooldown-ms", OrdersMenuManager.DEFAULT_ORDER_MENU_REFRESH_COOLDOWN_MILLIS);
         changed |= setDefaultIfMissing(config, "order-tax.percentage", 0);
         changed |= setDefaultIfMissing(config, "file-logging", false);
-        boolean coreDefaultsMissing = !config.isSet(FoPluginTitle.TITLE_PATH)
-            || !config.isSet(NativeDialogConfigDefaults.ENABLED_PATH)
-            || !config.isSet(NativeDialogConfigDefaults.WARN_ON_FALLBACK_PATH)
-            || !config.isSet(DiscordWebhookConfigDefaults.WEBHOOK_URL_PATH)
-            || !config.isSet(DiscordWebhookConfigDefaults.USERNAME_PATH)
-            || !config.isSet(DiscordWebhookConfigDefaults.AVATAR_URL_PATH)
-            || !config.isSet(DiscordWebhookConfigDefaults.LOG_FAILURES_PATH);
-        FoConfigDefaults.addStandardDefaults(config, getName());
-        changed |= coreDefaultsMissing;
+        changed |= setDefaultIfMissing(config, NativeDialogConfigDefaults.ENABLED_PATH, true);
+        changed |= setDefaultIfMissing(config, NativeDialogConfigDefaults.WARN_ON_FALLBACK_PATH, true);
+        changed |= setDefaultIfMissing(config, DiscordWebhookConfigDefaults.WEBHOOK_URL_PATH, "");
+        changed |= setDefaultIfMissing(config, DiscordWebhookConfigDefaults.USERNAME_PATH, "");
+        changed |= setDefaultIfMissing(config, DiscordWebhookConfigDefaults.AVATAR_URL_PATH, "");
+        changed |= setDefaultIfMissing(config, DiscordWebhookConfigDefaults.LOG_FAILURES_PATH, true);
         if (changed) {
             saveConfig();
         }
+    }
+
+    private boolean removeLegacyPluginTitle(FileConfiguration config) {
+        if (!config.isSet(LEGACY_PLUGIN_TITLE_PATH) && config.getComments(LEGACY_PLUGIN_TITLE_PATH).isEmpty()) {
+            return false;
+        }
+        config.set(LEGACY_PLUGIN_TITLE_PATH, null);
+        config.setComments(LEGACY_PLUGIN_TITLE_PATH, java.util.List.of());
+        return true;
     }
 
     private boolean backfillConfigDefaults(FileConfiguration config) {

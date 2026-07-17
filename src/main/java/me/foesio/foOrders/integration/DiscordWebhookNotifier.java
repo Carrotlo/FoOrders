@@ -3,7 +3,6 @@ package me.foesio.foOrders.integration;
 import me.foesio.core.discord.DiscordWebhookEmbed;
 import me.foesio.core.discord.DiscordWebhookService;
 import me.foesio.core.discord.DiscordWebhookSettings;
-import me.foesio.core.plugin.FoPluginTitle;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -27,14 +26,13 @@ public final class DiscordWebhookNotifier {
     }
 
     public void reloadFromConfig(FileConfiguration config) {
-        String pluginTitle = FoPluginTitle.resolve(config, DEFAULT_TITLE);
         DiscordWebhookSettings baseSettings = DiscordWebhookSettings.fromSection(
             config.getConfigurationSection("discord-webhook"),
-            pluginTitle
+            DEFAULT_TITLE
         );
         String webhookUsername = baseSettings.username();
-        if (webhookUsername.isBlank() || DEFAULT_TITLE.equals(webhookUsername)) {
-            webhookUsername = pluginTitle;
+        if (webhookUsername.isBlank()) {
+            webhookUsername = DEFAULT_TITLE;
         }
 
         EnumSet<WebhookCategory> parsedCategories = EnumSet.noneOf(WebhookCategory.class);
