@@ -2,6 +2,7 @@ package me.foesio.foOrders;
 
 import me.foesio.core.FoCoreContext;
 import me.foesio.core.FoPluginCore;
+import me.foesio.core.dialog.DialogService;
 import me.foesio.core.dialog.NativeDialogConfigDefaults;
 import me.foesio.core.discord.DiscordWebhookConfigDefaults;
 import me.foesio.core.logging.FoFileLogger;
@@ -60,6 +61,7 @@ public final class FoOrders extends JavaPlugin {
         getLogger().info("FoOrders scheduler mode: " + (schedulerAdapter.isFolia() ? "Folia-compatible bridge" : "Bukkit scheduler"));
         core.warnIfNativeDialogsUnavailable();
         core.metrics(BSTATS_PLUGIN_ID);
+        DialogService dialogService = core.dialogService();
         dialogInputService = new FoOrdersDialogInputService(this, schedulerAdapter, fileLogger);
 
         PlayerDataStore playerDataStore = new PlayerDataStore(this, schedulerAdapter);
@@ -78,6 +80,7 @@ public final class FoOrders extends JavaPlugin {
             messages,
             guiConfigManager,
             dialogInputService,
+            dialogService,
             core.inventoryCloseSuppressor(),
             core.inventoryDeposits(),
             fileLogger
@@ -161,6 +164,7 @@ public final class FoOrders extends JavaPlugin {
         changed |= setDefaultIfMissing(config, "order-tax.percentage", 0);
         changed |= setDefaultIfMissing(config, "file-logging", false);
         changed |= setDefaultIfMissing(config, NativeDialogConfigDefaults.ENABLED_PATH, true);
+        changed |= setDefaultIfMissing(config, "native-dialogs.item-selection", true);
         changed |= setDefaultIfMissing(config, NativeDialogConfigDefaults.WARN_ON_FALLBACK_PATH, true);
         changed |= setDefaultIfMissing(config, DiscordWebhookConfigDefaults.WEBHOOK_URL_PATH, "");
         changed |= setDefaultIfMissing(config, DiscordWebhookConfigDefaults.USERNAME_PATH, "");

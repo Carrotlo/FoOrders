@@ -74,25 +74,10 @@ final class MenuViewState {
 }
 
 final class ItemSelectState {
-    private static final int MAX_CACHED_RESULTS = 32;
-
     int page = 1;
     int sortIndex = 0;
     int filterIndex = 0;
     String search = "";
-    Map<ItemSelectCacheKey, List<OrderableItemOption>> cachedItems = new LinkedHashMap<>();
-
-    List<OrderableItemOption> cachedItems(ItemSelectCacheKey key) {
-        return cachedItems.get(key);
-    }
-
-    void cacheItems(ItemSelectCacheKey key, List<OrderableItemOption> items) {
-        cachedItems.put(key, items == null ? List.of() : List.copyOf(items));
-        while (cachedItems.size() > MAX_CACHED_RESULTS) {
-            ItemSelectCacheKey oldestKey = cachedItems.keySet().iterator().next();
-            cachedItems.remove(oldestKey);
-        }
-    }
 }
 
 record ItemSelectCacheKey(int contentRevision, int sortIndex, int filterIndex, String search) {
@@ -109,8 +94,28 @@ record OrderableItemOption(
     String customItemId,
     boolean allowOrderEnchants
 ) {
+    private static final String MATERIAL_CHOICE_PREFIX = "material:";
+    private static final String CUSTOM_CHOICE_PREFIX = "custom:";
+
     boolean isCustom() {
         return customItemId != null && !customItemId.isBlank();
+    }
+
+    String choiceKey() {
+        return isCustom() ? customChoiceKey(customItemId) : materialChoiceKey(material);
+    }
+
+    String choiceLabel() {
+        return isCustom() ? displayName + " (" + customItemId + ")" : displayName;
+    }
+
+    static String materialChoiceKey(Material material) {
+        return MATERIAL_CHOICE_PREFIX + material.name();
+    }
+
+    static String customChoiceKey(String customItemId) {
+        String normalizedId = customItemId == null ? "" : customItemId.trim().toLowerCase(Locale.ROOT);
+        return CUSTOM_CHOICE_PREFIX + normalizedId;
     }
 }
 

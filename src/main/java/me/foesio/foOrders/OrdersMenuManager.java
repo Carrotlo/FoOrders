@@ -1,5 +1,6 @@
 package me.foesio.foOrders;
 
+import me.foesio.core.dialog.DialogService;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.gui.GuiButtonConfig;
@@ -30,6 +31,7 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
+import java.lang.reflect.Constructor;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -198,9 +200,11 @@ public final class OrdersMenuManager implements Listener {
     final InventoryCloseSuppressor inventoryCloseSuppressor;
     final InventoryDepositService inventoryDepositService;
     final FoFileLogger fileLogger;
+    final DialogService dialogService;
     OrdersMenuViewSupport viewSupport;
     OrdersMenuInteractionSupport interactionSupport;
     volatile FoOrdersDialogInputService dialogInputService;
+    volatile FoOrdersItemSelectionDialogService itemSelectionDialogService;
     final DateTimeFormatter historyTimestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
     final Map<UUID, MenuViewState> menuStates = new ConcurrentHashMap<>();
     final Map<UUID, Long> orderMenuRefreshNanos = new ConcurrentHashMap<>();
@@ -224,6 +228,7 @@ public final class OrdersMenuManager implements Listener {
     volatile boolean historyPlayersCanViewOwn = true;
     volatile boolean historyAdminsCanViewAny = true;
     volatile int historyMaxEntriesPerType = 100;
+    volatile boolean itemSelectionDialogsEnabled = true;
 
     public OrdersMenuManager(
         FoOrders plugin,
@@ -234,6 +239,7 @@ public final class OrdersMenuManager implements Listener {
         PluginMessages messages,
         GuiConfigManager guiConfigManager,
         FoOrdersDialogInputService dialogInputService,
+        DialogService dialogService,
         InventoryCloseSuppressor inventoryCloseSuppressor,
         InventoryDepositService inventoryDepositService,
         FoFileLogger fileLogger
@@ -246,6 +252,7 @@ public final class OrdersMenuManager implements Listener {
         this.messages = messages;
         this.guiConfigManager = guiConfigManager;
         this.dialogInputService = dialogInputService;
+        this.dialogService = dialogService;
         this.inventoryCloseSuppressor = inventoryCloseSuppressor;
         this.inventoryDepositService = inventoryDepositService;
         this.fileLogger = fileLogger;
@@ -261,6 +268,32 @@ public final class OrdersMenuManager implements Listener {
 
     FoOrdersDialogInputService dialogInputService() {
         return dialogInputService;
+    }
+
+    DialogService dialogService() {
+        return dialogService;
+    }
+
+    FoOrdersItemSelectionDialogService itemSelectionDialogService() {
+        FoOrdersItemSelectionDialogService currentService = itemSelectionDialogService;
+        if (currentService != null) {
+            return currentService;
+        }
+        if (dialogService == null || dialogService.support() == null || !dialogService.support().canUseNativeDialogs()) {
+            return null;
+        }
+        try {
+            Class<?> serviceClass = Class.forName("me.foesio.foOrders.FoOrdersPaperItemSelectionDialogService");
+            Constructor<?> constructor = serviceClass.getDeclaredConstructor(OrdersMenuManager.class);
+            constructor.setAccessible(true);
+            currentService = (FoOrdersItemSelectionDialogService) constructor.newInstance(this);
+            itemSelectionDialogService = currentService;
+            return currentService;
+        } catch (ReflectiveOperationException | LinkageError | ClassCastException exception) {
+            dialogService.support().disableForSession("FoOrders item selection dialog unavailable: " + exception.getMessage());
+            warn("Native item selection dialog unavailable. Using inventory fallback: " + exception.getMessage());
+            return null;
+        }
     }
 
     void setDialogInputService(FoOrdersDialogInputService dialogInputService) {
@@ -281,6 +314,11 @@ public final class OrdersMenuManager implements Listener {
 
     void invalidateItemSelectCaches() {
         itemSelectContentRevision.incrementAndGet();
+        itemSupport.clearItemSelectCaches();
+        FoOrdersItemSelectionDialogService currentService = itemSelectionDialogService;
+        if (currentService != null) {
+            currentService.clearCache();
+        }
     }
 
     FoFileLogger fileLogger() {
@@ -361,6 +399,10 @@ public final class OrdersMenuManager implements Listener {
         orderMenuRefreshNanos.remove(playerId);
         pendingMainMenuRefreshIds.remove(playerId);
         pendingItemSelectRefreshIds.remove(playerId);
+        FoOrdersItemSelectionDialogService currentService = itemSelectionDialogService;
+        if (currentService != null) {
+            currentService.clearPending(playerId);
+        }
         interactionSupport.onPlayerQuit(event);
     }
 
@@ -406,6 +448,7 @@ public final class OrdersMenuManager implements Listener {
         historyEnabled = plugin.getConfig().getBoolean("history.enabled", true);
         historyPlayersCanViewOwn = plugin.getConfig().getBoolean("history.players-can-view-own", true);
         historyAdminsCanViewAny = plugin.getConfig().getBoolean("history.admins-can-view-any", true);
+        itemSelectionDialogsEnabled = plugin.getConfig().getBoolean("native-dialogs.item-selection", true);
         int configuredHistoryMaxEntries = plugin.getConfig().getInt("history.max-entries-per-type", 100);
         historyMaxEntriesPerType = Math.max(1, configuredHistoryMaxEntries);
         if (configuredHistoryMaxEntries != historyMaxEntriesPerType) {

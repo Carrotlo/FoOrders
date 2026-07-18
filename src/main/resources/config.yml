@@ -21,6 +21,9 @@ file-logging: false
 # Set this to false to always use chat input mode.
 native-dialogs:
   enabled: true
+  # Uses native dialogs for choosing the item in the new order flow when available.
+  # Set this to false to always use the inventory item selection GUI.
+  item-selection: true
   # Sends admins one warning when native dialogs are enabled but unavailable and the plugin falls back.
   warn-on-fallback: true
 

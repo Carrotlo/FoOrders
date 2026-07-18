@@ -82,6 +82,30 @@ final class OrdersMenuActionSupport {
         manager.viewSupport.openItemSelectMenu(player, resetPage);
     }
 
+    private void openItemSelection(Player player) {
+        if (!manager.plugin.getConfig().getBoolean("native-dialogs.enabled", true)
+            || !manager.itemSelectionDialogsEnabled
+            || manager.dialogService() == null) {
+            openItemSelectMenu(player, true);
+            return;
+        }
+
+        MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
+        viewState.getOrCreateItemSelectState().page = 1;
+
+        NewOrderDraft draft = viewState.getOrCreateDraft();
+        FoOrdersItemSelectionDialogService itemDialogService = manager.itemSelectionDialogService();
+        if (itemDialogService != null && itemDialogService.open(
+            player,
+            itemChoiceKey(draft),
+            selected -> selectOrderItem(player, viewState, selected),
+            () -> openItemSelectMenu(player, true)
+        )) {
+            return;
+        }
+        openItemSelectMenu(player, true);
+    }
+
     private void refreshItemSelectMenuDebounced(Player player) {
         manager.viewSupport.refreshItemSelectMenuDebounced(player);
     }
@@ -453,7 +477,7 @@ final class OrdersMenuActionSupport {
         }
 
         if (rawSlot == itemSlot) {
-            openItemSelectMenu(player, true);
+            openItemSelection(player);
             return;
         }
 
@@ -850,27 +874,37 @@ final class OrdersMenuActionSupport {
             List<OrderableItemOption> items = getFilteredSortedItems(itemSelectState);
             int itemIndex = (itemSelectState.page - 1) * ITEM_SELECT_PAGE_SIZE + rawSlot;
             if (itemIndex >= 0 && itemIndex < items.size()) {
-                OrderableItemOption selected = items.get(itemIndex);
-                NewOrderDraft currentDraft = viewState.getOrCreateDraft();
-                if (!selected.isCustom() && isOrderBlacklisted(selected.material(), Map.of())) {
-                    sendErrorActionbar(player, manager.messages().get("actionbar.order-blacklisted"));
-                    openItemSelectMenu(player, false);
-                    return;
-                }
-
-                Map<String, Integer> selectedEnchantments =
-                    sanitizeDraftEnchantments(selected.customItemId(), selected.material(), currentDraft.enchantLevels());
-                viewState.draft = currentDraft
-                    .withSelection(selected.customItemId(), selected.material().name())
-                    .withEnchantLevels(selectedEnchantments);
-
-                if (supportsOrderEnchantments(selected.customItemId(), selected.material())) {
-                    openEnchantSelectMenu(player, true);
-                } else {
-                    openNewOrderMenu(player);
-                }
+                selectOrderItem(player, viewState, items.get(itemIndex));
             }
         }
+    }
+
+    private void selectOrderItem(Player player, MenuViewState viewState, OrderableItemOption selected) {
+        NewOrderDraft currentDraft = viewState.getOrCreateDraft();
+        if (!selected.isCustom() && isOrderBlacklisted(selected.material(), Map.of())) {
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-blacklisted"));
+            openItemSelectMenu(player, false);
+            return;
+        }
+
+        Map<String, Integer> selectedEnchantments =
+            sanitizeDraftEnchantments(selected.customItemId(), selected.material(), currentDraft.enchantLevels());
+        viewState.draft = currentDraft
+            .withSelection(selected.customItemId(), selected.material().name())
+            .withEnchantLevels(selectedEnchantments);
+
+        if (supportsOrderEnchantments(selected.customItemId(), selected.material())) {
+            openEnchantSelectMenu(player, true);
+        } else {
+            openNewOrderMenu(player);
+        }
+    }
+
+    private String itemChoiceKey(NewOrderDraft draft) {
+        if (draft.customItemId() != null) {
+            return OrderableItemOption.customChoiceKey(draft.customItemId());
+        }
+        return OrderableItemOption.materialChoiceKey(resolveMaterial(draft.materialName()));
     }
 
     void handleEnchantSelectClick(Player player, InventoryClickEvent event) {

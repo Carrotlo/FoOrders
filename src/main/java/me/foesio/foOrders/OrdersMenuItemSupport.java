@@ -1,10 +1,10 @@
 package me.foesio.foOrders;
 
-import me.foesio.foOrders.storage.CustomItemStore;
-import me.foesio.foOrders.storage.PlayerDataStore;
 import me.foesio.foOrders.util.TextFormat;
 import me.foesio.core.number.LargeNumberParser;
 import me.foesio.core.number.NumberFormatters;
+import me.foesio.foOrders.storage.CustomItemStore;
+import me.foesio.foOrders.storage.PlayerDataStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -17,6 +17,7 @@ import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,9 +31,24 @@ import java.util.UUID;
 import static me.foesio.foOrders.OrdersMenuManager.*;
 
 final class OrdersMenuItemSupport {
+    private static final int MAX_SHARED_ITEM_SELECT_RESULTS = 128;
+    private static final CachedOrderableItems EMPTY_ORDERABLE_ITEMS = new CachedOrderableItems(-1, List.of(), List.of());
+
     private final OrdersMenuManager manager;
     private final CustomItemStore customItemStore;
     private final PlayerDataStore playerDataStore;
+    private final Object orderableItemCacheLock = new Object();
+    private final Map<ItemSelectCacheKey, List<OrderableItemOption>> sharedItemSelectResults = Collections.synchronizedMap(
+        new LinkedHashMap<ItemSelectCacheKey, List<OrderableItemOption>>(64, 0.75F, true) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<ItemSelectCacheKey, List<OrderableItemOption>> eldest) {
+                return size() > MAX_SHARED_ITEM_SELECT_RESULTS;
+            }
+        }
+    );
+    private volatile CachedOrderableItems cachedOrderableItems = EMPTY_ORDERABLE_ITEMS;
 
     OrdersMenuItemSupport(OrdersMenuManager manager) {
         this.manager = manager;
@@ -635,17 +651,9 @@ final class OrdersMenuItemSupport {
     }
 
     List<CustomItemStore.CustomItemDefinition> getSortedCustomItems() {
-        List<CustomItemStore.CustomItemDefinition> customItems = customItemStore.listAll();
-        customItems.sort((left, right) -> {
-            String leftName = resolveTemplateDisplayName(left.template());
-            String rightName = resolveTemplateDisplayName(right.template());
-            int compare = leftName.compareToIgnoreCase(rightName);
-            if (compare != 0) {
-                return compare;
-            }
-            return left.id().compareToIgnoreCase(right.id());
-        });
-        return customItems;
+        return getOrderableItemCache().customItems().stream()
+            .map(CustomItemStore.CustomItemDefinition::copy)
+            .toList();
     }
 
     String resolveTemplateDisplayName(ItemStack template) {
@@ -762,71 +770,125 @@ final class OrdersMenuItemSupport {
         }
 
         String search = normalizeItemSelectSearch(itemSelectState.search);
+        itemSelectState.search = search;
+        return getCachedFilteredSortedItems(itemSelectState.sortIndex, itemSelectState.filterIndex, search);
+    }
+
+    void clearItemSelectCaches() {
+        synchronized (orderableItemCacheLock) {
+            cachedOrderableItems = EMPTY_ORDERABLE_ITEMS;
+        }
+        sharedItemSelectResults.clear();
+    }
+
+    private List<OrderableItemOption> getCachedFilteredSortedItems(int sortIndex, int filterIndex, String rawSearch) {
+        String search = normalizeItemSelectSearch(rawSearch);
         ItemSelectCacheKey cacheKey = new ItemSelectCacheKey(
             manager.itemSelectContentRevision(),
-            itemSelectState.sortIndex,
-            itemSelectState.filterIndex,
+            sortIndex,
+            filterIndex,
             search
         );
-        List<OrderableItemOption> cachedItems = itemSelectState.cachedItems(cacheKey);
+        List<OrderableItemOption> cachedItems = sharedItemSelectResults.get(cacheKey);
         if (cachedItems != null) {
             return cachedItems;
         }
 
-        itemSelectState.search = search;
-        List<OrderableItemOption> filtered = getFilteredSortedItems(itemSelectState);
-        itemSelectState.cacheItems(cacheKey, filtered);
-        return itemSelectState.cachedItems(cacheKey);
+        List<OrderableItemOption> filtered = filterCachedOrderableItems(sortIndex, filterIndex, search);
+        List<OrderableItemOption> immutableFiltered = List.copyOf(filtered);
+        sharedItemSelectResults.put(cacheKey, immutableFiltered);
+        return immutableFiltered;
     }
 
     private String normalizeItemSelectSearch(String search) {
         return search == null ? "" : search.trim();
     }
 
-    private List<OrderableItemOption> getFilteredSortedItems(ItemSelectState itemSelectState) {
+    private List<OrderableItemOption> filterCachedOrderableItems(int sortIndex, int filterIndex, String search) {
+        List<OrderableItemOption> options = getOrderableItemCache().options();
         List<OrderableItemOption> filtered = new ArrayList<>();
-        String searchLower = normalizeItemSelectSearch(itemSelectState.search).toLowerCase(Locale.ROOT);
+        String searchLower = normalizeItemSelectSearch(search).toLowerCase(Locale.ROOT);
 
+        if (sortIndex == 0) {
+            for (OrderableItemOption option : options) {
+                if (matchesCachedItemOption(option, filterIndex, searchLower)) {
+                    filtered.add(option);
+                }
+            }
+            return filtered;
+        }
+
+        for (int index = options.size() - 1; index >= 0; index--) {
+            OrderableItemOption option = options.get(index);
+            if (matchesCachedItemOption(option, filterIndex, searchLower)) {
+                filtered.add(option);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean matchesCachedItemOption(OrderableItemOption option, int filterIndex, String searchLower) {
+        if (!matchesItemFilter(option.material(), filterIndex)) {
+            return false;
+        }
+        return searchLower.isBlank() || option.searchText().contains(searchLower);
+    }
+
+    private CachedOrderableItems getOrderableItemCache() {
+        int revision = manager.itemSelectContentRevision();
+        CachedOrderableItems cached = cachedOrderableItems;
+        if (cached.contentRevision() == revision) {
+            return cached;
+        }
+
+        synchronized (orderableItemCacheLock) {
+            cached = cachedOrderableItems;
+            if (cached.contentRevision() == revision) {
+                return cached;
+            }
+
+            cached = buildOrderableItemCache(revision);
+            cachedOrderableItems = cached;
+            return cached;
+        }
+    }
+
+    private CachedOrderableItems buildOrderableItemCache(int revision) {
+        List<CustomItemStore.CustomItemDefinition> customItems = customItemStore.listAll();
+        customItems.sort((left, right) -> {
+            String leftName = resolveTemplateDisplayName(left.template());
+            String rightName = resolveTemplateDisplayName(right.template());
+            int compare = leftName.compareToIgnoreCase(rightName);
+            if (compare != 0) {
+                return compare;
+            }
+            return left.id().compareToIgnoreCase(right.id());
+        });
+
+        List<OrderableItemOption> options = new ArrayList<>(ALL_ORDERABLE_ITEMS.size() + customItems.size());
         for (Material material : ALL_ORDERABLE_ITEMS) {
             if (isOrderBlacklisted(material, Map.of())) {
                 continue;
             }
-            if (!matchesItemFilter(material, itemSelectState.filterIndex)) {
-                continue;
-            }
 
             String displayName = formatMaterialName(material);
-            String searchText = displayName.toLowerCase(Locale.ROOT);
-            if (!searchLower.isBlank()) {
-                if (!searchText.contains(searchLower)) {
-                    continue;
-                }
-            }
-            filtered.add(new OrderableItemOption(
+            options.add(new OrderableItemOption(
                 material,
                 displayName,
-                searchText,
+                displayName.toLowerCase(Locale.ROOT),
                 new ItemStack(material),
                 null,
                 supportsOrderEnchantments(material)
             ));
         }
 
-        for (CustomItemStore.CustomItemDefinition customItem : getSortedCustomItems()) {
+        for (CustomItemStore.CustomItemDefinition customItem : customItems) {
             ItemStack template = customItem.template().clone();
             template.setAmount(1);
             Material material = template.getType();
-            if (!matchesItemFilter(material, itemSelectState.filterIndex)) {
-                continue;
-            }
-
             String displayName = resolveTemplateDisplayName(template);
             String searchText = (displayName + " " + customItem.id() + " " + formatMaterialName(material)).toLowerCase(Locale.ROOT);
-            if (!searchLower.isBlank() && !searchText.contains(searchLower)) {
-                continue;
-            }
-
-            filtered.add(new OrderableItemOption(
+            options.add(new OrderableItemOption(
                 material,
                 displayName,
                 searchText,
@@ -836,14 +898,10 @@ final class OrdersMenuItemSupport {
             ));
         }
 
-        filtered.sort((left, right) -> {
-            int compare = left.displayName().compareToIgnoreCase(right.displayName());
-            if (compare == 0) {
-                compare = left.searchText().compareToIgnoreCase(right.searchText());
-            }
-            return itemSelectState.sortIndex == 0 ? compare : -compare;
-        });
-        return filtered;
+        options.sort(Comparator
+            .comparing(OrderableItemOption::displayName, String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(OrderableItemOption::searchText, String.CASE_INSENSITIVE_ORDER));
+        return new CachedOrderableItems(revision, List.copyOf(options), List.copyOf(customItems));
     }
 
     String getSignInputFirstLine(SignInputType inputType, String mainSearch, String itemSearch, NewOrderDraft draft) {
@@ -1014,5 +1072,12 @@ final class OrdersMenuItemSupport {
 
     String formatCompactAmount(double value) {
         return NumberFormatters.compact(value);
+    }
+
+    private record CachedOrderableItems(
+        int contentRevision,
+        List<OrderableItemOption> options,
+        List<CustomItemStore.CustomItemDefinition> customItems
+    ) {
     }
 }
