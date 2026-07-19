@@ -60,6 +60,9 @@ public final class FoOrders extends JavaPlugin {
         FoScheduler schedulerAdapter = core.scheduler();
         getLogger().info("FoOrders scheduler mode: " + (schedulerAdapter.isFolia() ? "Folia-compatible bridge" : "Bukkit scheduler"));
         core.warnIfNativeDialogsUnavailable();
+        if (!core.supportsDialogSprites()) {
+            getLogger().info("FoOrders dialog sprite icons disabled: " + core.dialogSpriteSupport().unavailableReason());
+        }
         core.metrics(BSTATS_PLUGIN_ID);
         DialogService dialogService = core.dialogService();
         dialogInputService = new FoOrdersDialogInputService(this, schedulerAdapter, fileLogger);
