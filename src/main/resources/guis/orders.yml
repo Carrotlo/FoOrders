@@ -1,5 +1,5 @@
 # Editable GUI text and button materials for FoOrders inventory menus.
-# Use #RRGGBB or & color codes. Dynamic placeholders are listed beside each item where supported.
+# Use {theme}, #RRGGBB, or & color codes. Dynamic placeholders are listed beside each item where supported.
 # Slot numbers are 0-based Minecraft inventory slots.
 titles:
   main: "&8ᴏʀᴅᴇʀꜱ (Page {page})"
@@ -65,22 +65,22 @@ buttons:
   # Per-menu slot placement stays under items.<menu>.<button>.slot.
   back:
     material: IRON_DOOR
-    name: "#03fc88ʙᴀᴄᴋ"
+    name: "{theme}ʙᴀᴄᴋ"
     lore:
       - "#ffffffClick to return"
   previous-page:
     material: ARROW
-    name: "#03fc88ᴘʀᴇᴠɪᴏᴜꜱ ᴘᴀɢᴇ"
+    name: "{theme}ᴘʀᴇᴠɪᴏᴜꜱ ᴘᴀɢᴇ"
     lore:
       - "#ffffffPage {page}/{max_page}"
   next-page:
     material: ARROW
-    name: "#03fc88ɴᴇxᴛ ᴘᴀɢᴇ"
+    name: "{theme}ɴᴇxᴛ ᴘᴀɢᴇ"
     lore:
       - "#ffffffPage {page}/{max_page}"
   search:
     material: NAME_TAG
-    name: "#03fc88ꜱᴇᴀʀᴄʜ"
+    name: "{theme}ꜱᴇᴀʀᴄʜ"
     lore:
       - "#ffffffCurrent: {current}"
       - "#ffffffClick to search"
@@ -103,12 +103,12 @@ items:
       # The icon stays the ordered item. These settings only change the visible name/lore text.
       # Placeholders: {owner}, {item}, {material}, {amount}, {amount_ordered}, {delivered}, {amount_delivered}, {amount_left}, {price}, {price_each}, {total}, {paid}, {paid_left}
       # {price} and {price_each} both mean the per-item price without a dollar sign, so use ${price} if you want "$10 each".
-      name: "#03fc88{owner}'s Order"
+      name: "{theme}{owner}'s Order"
       lore:
         # Amount line for the ordered item.
-        amount: "#03fc88{amount} #ffffff{item}"
+        amount: "{theme}{amount} #ffffff{item}"
         # Per-item price line. Change "each" here if you want different wording.
-        price: "#03fc88${price} #ffffffeach"
+        price: "{theme}${price} #ffffffeach"
         # Delivered progress line.
         delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
         # Paid progress line.
@@ -120,15 +120,15 @@ items:
     sort:
       slot: 47
       material: CAULDRON
-      name: "#03fc88ꜱᴏʀᴛ"
+      name: "{theme}ꜱᴏʀᴛ"
     filter:
       slot: 48
       material: HOPPER
-      name: "#03fc88ꜰɪʟᴛᴇʀ"
+      name: "{theme}ꜰɪʟᴛᴇʀ"
     refresh:
       slot: 49
       material: MAP
-      name: "#03fc88ᴏʀᴅᴇʀꜱ"
+      name: "{theme}ᴏʀᴅᴇʀꜱ"
       lore:
         - "#ffffffClick to refresh"
     search:
@@ -136,13 +136,13 @@ items:
     your-orders:
       slot: 51
       material: BOOK
-      name: "#03fc88ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
+      name: "{theme}ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
       lore:
         - "#ffffffClick to view your orders"
     history:
       slot: 52
       material: WRITABLE_BOOK
-      name: "#03fc88ʜɪꜱᴛᴏʀʏ"
+      name: "{theme}ʜɪꜱᴛᴏʀʏ"
       lore:
         - "#ffffffClick to view order history"
         - "#ffffffSwitch between order and deliver tabs"
@@ -151,7 +151,7 @@ items:
     new-order:
       slot: 26
       material: MAP
-      name: "#03fc88New Order"
+      name: "{theme}New Order"
       lore:
         - "#ffffffClick to create new order"
 
@@ -164,44 +164,44 @@ items:
         - "#ffffffClick to return"
     item:
       slot: 12
-      name: "#03fc88ɪᴛᴇᴍ"
+      name: "{theme}ɪᴛᴇᴍ"
     amount:
       slot: 13
       material: CHEST
-      name: "#03fc88ᴀᴍᴏᴜɴᴛ"
+      name: "{theme}ᴀᴍᴏᴜɴᴛ"
       lore:
         - "#ffffffClick to type number of items"
         - "#a7b8b0({amount})"
     price:
       slot: 14
       material: EMERALD
-      name: "#03fc88ᴘʀɪᴄᴇ"
+      name: "{theme}ᴘʀɪᴄᴇ"
       lore:
         - "#ffffffClick to type the price per item"
         - "#a7b8b0(${price})"
     enchants:
       slot: 15
       material: ENCHANTED_BOOK
-      name: "#03fc88ᴇɴᴄʜᴀɴᴛꜱ"
+      name: "{theme}ᴇɴᴄʜᴀɴᴛꜱ"
     confirm:
       slot: 16
       material: LIME_STAINED_GLASS_PANE
       name: "#3ecf8eᴄᴏɴꜰɪʀᴍ"
       lore:
         - "#ffffffClick to confirm order"
-        - "#a7b8b0Subtotal: #03fc88${subtotal}"
-        - "#a7b8b0Tax ({tax_percent}%): #03fc88${tax}"
+        - "#a7b8b0Subtotal: {theme}${subtotal}"
+        - "#a7b8b0Tax ({tax_percent}%): {theme}${tax}"
         - "#a7b8b0Total: #3ecf8e${total}"
 
   item-select:
     sort:
       slot: 48
       material: CAULDRON
-      name: "#03fc88ꜱᴏʀᴛ"
+      name: "{theme}ꜱᴏʀᴛ"
     filter:
       slot: 49
       material: HOPPER
-      name: "#03fc88ꜰɪʟᴛᴇʀ"
+      name: "{theme}ꜰɪʟᴛᴇʀ"
     search:
       slot: 50
     previous-page:
@@ -230,7 +230,7 @@ items:
     controls:
       slot: 50
       material: OAK_SIGN
-      name: "#03fc88ᴄᴏɴᴛʀᴏʟꜱ"
+      name: "{theme}ᴄᴏɴᴛʀᴏʟꜱ"
       lore:
         - "#ffffffLeft click: +1 level"
         - "#ffffffRight click: -1 level"
@@ -279,7 +279,7 @@ items:
     info:
       slot: 46
       material: OAK_SIGN
-      name: "#03fc88ᴠɪᴇᴡɪɴɢ"
+      name: "{theme}ᴠɪᴇᴡɪɴɢ"
       lore:
         - "#ffffff{target}"
         - "#a7b8b0Page {page}/{pages}"
@@ -295,7 +295,7 @@ items:
     next-page:
       slot: 53
     entry:
-      name: "#03fc88{action}"
+      name: "{theme}{action}"
       lore:
         - "#ffffff{details}"
         - "#a7b8b0Player: {target}"

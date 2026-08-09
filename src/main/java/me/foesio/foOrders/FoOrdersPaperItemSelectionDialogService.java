@@ -40,11 +40,10 @@ final class FoOrdersPaperItemSelectionDialogService implements FoOrdersItemSelec
     private static final int BUTTON_WIDTH = 144;
     private static final int COLUMNS = 3;
     private static final int MAX_CACHED_DIALOGS = 96;
-    private static final long PENDING_SELECTION_TICKS = 20L * 60L * 5L;
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
     private static final ClickCallback.Options CACHED_CALLBACK_OPTIONS = ClickCallback.Options.builder()
-        .uses(Integer.MAX_VALUE)
-        .lifetime(Duration.ofHours(6))
+        .uses(ClickCallback.UNLIMITED_USES)
+        .lifetime(Duration.ofDays(3650))
         .build();
 
     private final OrdersMenuManager manager;
@@ -85,6 +84,11 @@ final class FoOrdersPaperItemSelectionDialogService implements FoOrdersItemSelec
         }
     }
 
+    @Override
+    public void clearAllPending() {
+        pendingSelections.clear();
+    }
+
     private boolean open(
         Player player,
         String currentChoiceKey,
@@ -100,7 +104,6 @@ final class FoOrdersPaperItemSelectionDialogService implements FoOrdersItemSelec
         UUID playerId = player.getUniqueId();
         PendingSelection pending = new PendingSelection(safeCurrentKey, onSelect, onFallback);
         pendingSelections.put(playerId, pending);
-        manager.scheduler.runLaterForPlayer(player, () -> pendingSelections.remove(playerId, pending), PENDING_SELECTION_TICKS);
 
         try {
             ((Audience) player).showDialog(cachedDialog(safeCurrentKey, filter));

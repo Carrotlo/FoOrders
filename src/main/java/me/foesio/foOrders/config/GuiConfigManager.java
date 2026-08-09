@@ -2,6 +2,7 @@ package me.foesio.foOrders.config;
 
 import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.foOrders.FoOrders;
+import me.foesio.foOrders.PluginMessages;
 import me.foesio.foOrders.util.TextFormat;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -15,11 +16,13 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 public final class GuiConfigManager {
     private static final String FILE_NAME = "guis/orders.yml";
@@ -35,7 +38,9 @@ public final class GuiConfigManager {
         "#ffffffClick to confirm order",
         "#a7b8b0(Total: ${total})"
     );
-    private static final String TAX_DISCLOSURE_LORE = "#a7b8b0Tax ({tax_percent}%): #03fc88${tax}";
+    private static final String TAX_DISCLOSURE_LORE = "#a7b8b0Tax ({tax_percent}%): {theme}${tax}";
+    private static final String DEFAULT_THEME_COLOR = "#03fc88";
+    private static final Pattern DEFAULT_THEME_COLOR_PATTERN = Pattern.compile("(?i)#03fc88");
     private static final List<String> REMOVED_GUI_PATHS = List.of(
         "titles.admin-actions",
         "titles.admin-item-editor",
@@ -82,6 +87,7 @@ public final class GuiConfigManager {
                 changed |= backfillMissingDefaults(loaded, defaults);
                 changed |= backfillNewOrderConfirmTaxLore(loaded, defaults);
                 changed |= removeRemovedGuiPaths(loaded);
+                changed |= migrateThemeTokenPlaceholders(loaded);
                 if (changed) {
                     loaded.save(file);
                 }
@@ -117,12 +123,12 @@ public final class GuiConfigManager {
 
     private String buildTitle(String path, String fallback, Map<String, String> placeholders) {
         String raw = guis.getString("titles." + path, fallback);
-        return TextFormat.colorize(TextFormat.applyPlaceholders(raw == null ? fallback : raw, placeholders));
+        return formatGuiText(raw == null ? fallback : raw, placeholders);
     }
 
     public String text(String path, String fallback, Map<String, String> placeholders) {
         String raw = guis.getString(path, fallback);
-        return TextFormat.colorize(TextFormat.applyPlaceholders(raw == null ? fallback : raw, placeholders));
+        return formatGuiText(raw == null ? fallback : raw, placeholders);
     }
 
     public GuiItem item(String path, Material fallbackMaterial, String fallbackName, List<String> fallbackLore) {
@@ -172,11 +178,11 @@ public final class GuiConfigManager {
             if (containsHiddenPlaceholder(line, safeHiddenLorePlaceholders)) {
                 continue;
             }
-            lore.add(TextFormat.colorize(TextFormat.applyPlaceholders(line, safePlaceholders)));
+            lore.add(formatGuiText(line, safePlaceholders));
         }
         return new GuiItem(
             material,
-            TextFormat.colorize(TextFormat.applyPlaceholders(rawName == null ? fallbackName : rawName, safePlaceholders)),
+            formatGuiText(rawName == null ? fallbackName : rawName, safePlaceholders),
             lore
         );
     }
@@ -208,9 +214,36 @@ public final class GuiConfigManager {
             if (rawLabel == null || rawLabel.isBlank()) {
                 rawLabel = fallback.get(i);
             }
-            labels.add(TextFormat.colorize(rawLabel));
+            labels.add(formatGuiText(rawLabel, Map.of()));
         }
         return List.copyOf(labels);
+    }
+
+    private String formatGuiText(String raw, Map<String, String> placeholders) {
+        return TextFormat.colorize(TextFormat.applyPlaceholders(raw == null ? "" : raw, guiPlaceholders(placeholders)));
+    }
+
+    private Map<String, String> guiPlaceholders(Map<String, String> placeholders) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        merged.put("theme", themeColor());
+        merged.put("plugin", plugin.getName());
+        if (placeholders != null && !placeholders.isEmpty()) {
+            merged.putAll(placeholders);
+        }
+        return merged;
+    }
+
+    private String themeColor() {
+        if (plugin instanceof FoOrders foOrders) {
+            PluginMessages messages = foOrders.messages();
+            if (messages != null) {
+                String configured = messages.themeColor();
+                if (configured != null && !configured.isBlank()) {
+                    return configured;
+                }
+            }
+        }
+        return TextFormat.colorize(DEFAULT_THEME_COLOR);
     }
 
     public int itemSlot(String path, int fallback, int inventorySize) {
@@ -322,6 +355,59 @@ public final class GuiConfigManager {
         return changed;
     }
 
+    private boolean migrateThemeTokenPlaceholders(YamlConfiguration loaded) {
+        boolean changed = false;
+        for (String key : loaded.getKeys(true)) {
+            if (loaded.isConfigurationSection(key)) {
+                continue;
+            }
+            if (loaded.isString(key)) {
+                String current = loaded.getString(key, "");
+                String migrated = replaceDefaultThemeColorToken(current);
+                if (!current.equals(migrated)) {
+                    loaded.set(key, migrated);
+                    changed = true;
+                }
+                continue;
+            }
+            if (loaded.isList(key)) {
+                List<?> current = loaded.getList(key);
+                List<Object> migrated = migrateThemeTokenList(current);
+                if (migrated != null) {
+                    loaded.set(key, migrated);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private List<Object> migrateThemeTokenList(List<?> current) {
+        if (current == null || current.isEmpty()) {
+            return null;
+        }
+
+        boolean changed = false;
+        List<Object> migrated = new ArrayList<>(current.size());
+        for (Object value : current) {
+            if (value instanceof String text) {
+                String migratedText = replaceDefaultThemeColorToken(text);
+                migrated.add(migratedText);
+                changed |= !text.equals(migratedText);
+            } else {
+                migrated.add(value);
+            }
+        }
+        return changed ? migrated : null;
+    }
+
+    private String replaceDefaultThemeColorToken(String value) {
+        if (value == null || value.isBlank()) {
+            return value == null ? "" : value;
+        }
+        return DEFAULT_THEME_COLOR_PATTERN.matcher(value).replaceAll("{theme}");
+    }
+
     private boolean migrateLegacyButtonsFile(YamlConfiguration loaded) {
         File legacyFile = new File(plugin.getDataFolder(), LEGACY_BUTTONS_FILE_NAME);
         if (!legacyFile.exists()) {
@@ -360,9 +446,23 @@ public final class GuiConfigManager {
             if (section.isConfigurationSection(key)) {
                 continue;
             }
-            buttonConfig.set(key, section.get(key));
+            buttonConfig.set(key, resolveButtonConfigValue(section.get(key)));
         }
         return GuiButtonConfig.fromGuiFile(buttonConfig);
+    }
+
+    private Object resolveButtonConfigValue(Object value) {
+        if (value instanceof String text) {
+            return formatGuiText(text, Map.of());
+        }
+        if (value instanceof List<?> values) {
+            List<Object> resolved = new ArrayList<>(values.size());
+            for (Object nestedValue : values) {
+                resolved.add(resolveButtonConfigValue(nestedValue));
+            }
+            return resolved;
+        }
+        return value;
     }
 
     private boolean copyMissingSection(ConfigurationSection source, YamlConfiguration target, String targetPath) {

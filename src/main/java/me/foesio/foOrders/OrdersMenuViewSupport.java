@@ -46,6 +46,7 @@ final class OrdersMenuViewSupport {
     private final Map<StaticGuiItemKey, ItemStack> staticGuiItemTemplates = new ConcurrentHashMap<>();
     private final Map<CyclingGuiItemKey, ItemStack> cyclingGuiItemTemplates = new ConcurrentHashMap<>();
     private volatile int staticGuiItemRevision = -1;
+    private volatile int messageGuiItemRevision = -1;
 
     OrdersMenuViewSupport(OrdersMenuManager manager) {
         this.manager = manager;
@@ -170,12 +171,15 @@ final class OrdersMenuViewSupport {
 
     private ItemStack createGuiCyclingItem(String path, Material material, String displayName, List<String> options, int selectedIndex, String accentColor, String defaultColor) {
         int revision = refreshGuiItemCachesIfNeeded();
-        CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, material, displayName, options, selectedIndex, accentColor, defaultColor);
+        String configuredSelectedColor = manager.messages().themeColor();
+        String selectedColor = configuredSelectedColor == null || configuredSelectedColor.isBlank() ? accentColor : configuredSelectedColor;
+        CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, material, displayName, options, selectedIndex, selectedColor, defaultColor);
         ItemStack template = cyclingGuiItemTemplates.computeIfAbsent(key, ignored -> {
             GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, List.of());
             List<String> lore = new ArrayList<>();
             for (int i = 0; i < options.size(); i++) {
-                lore.add((i == selectedIndex ? accentColor : defaultColor) + "• " + options.get(i));
+                boolean selected = i == selectedIndex;
+                lore.add((selected ? selectedColor + "» " : defaultColor + "• ") + options.get(i));
             }
             return createSimpleItem(item.material(), item.name(), lore);
         });
@@ -1536,10 +1540,12 @@ final class OrdersMenuViewSupport {
 
     private int refreshGuiItemCachesIfNeeded() {
         int revision = manager.guis().revision();
-        if (staticGuiItemRevision != revision) {
+        int messageRevision = manager.messages().revision();
+        if (staticGuiItemRevision != revision || messageGuiItemRevision != messageRevision) {
             staticGuiItemTemplates.clear();
             cyclingGuiItemTemplates.clear();
             staticGuiItemRevision = revision;
+            messageGuiItemRevision = messageRevision;
         }
         return revision;
     }

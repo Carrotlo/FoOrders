@@ -135,6 +135,7 @@ public final class FoOrders extends JavaPlugin {
             fileLogger.info("FoOrders disable started.");
         }
         if (ordersMenuManager != null) {
+            ordersMenuManager.clearItemSelectionDialogState();
             ordersMenuManager.saveAllData();
         }
         if (dialogInputService != null) {

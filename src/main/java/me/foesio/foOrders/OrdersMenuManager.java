@@ -321,6 +321,13 @@ public final class OrdersMenuManager implements Listener {
         }
     }
 
+    void clearItemSelectionDialogState() {
+        FoOrdersItemSelectionDialogService currentService = itemSelectionDialogService;
+        if (currentService != null) {
+            currentService.clearAllPending();
+        }
+    }
+
     FoFileLogger fileLogger() {
         return fileLogger;
     }

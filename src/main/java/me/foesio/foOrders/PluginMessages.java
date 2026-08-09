@@ -17,14 +17,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public final class PluginMessages {
     private static final String FILE_NAME = "messages.yml";
+    private static final String DEFAULT_THEME_COLOR = "#03fc88";
+    private static final Pattern DEFAULT_THEME_COLOR_PATTERN = Pattern.compile("(?i)#03fc88");
 
     private final JavaPlugin plugin;
     private YamlConfiguration messages = new YamlConfiguration();
+    private volatile String themeColor = FoText.color(DEFAULT_THEME_COLOR);
+    private volatile int revision = 0;
 
     public PluginMessages(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -39,6 +46,7 @@ public final class PluginMessages {
         }
 
         YamlConfiguration loadedMessages = YamlConfiguration.loadConfiguration(messagesFile);
+        boolean hadThemeToken = loadedMessages.isSet("tokens.theme");
         try (InputStream defaultsStream = plugin.getResource(FILE_NAME)) {
             if (defaultsStream != null) {
                 YamlConfiguration defaults = YamlConfiguration.loadConfiguration(
@@ -47,6 +55,9 @@ public final class PluginMessages {
                 loadedMessages.setDefaults(defaults);
                 boolean changed = backfillMissingDefaults(loadedMessages, defaults);
                 changed |= migratePluginTitleDefaults(loadedMessages);
+                if (!hadThemeToken) {
+                    changed |= migrateThemeTokenPlaceholders(loadedMessages);
+                }
                 if (changed && !createdFile) {
                     loadedMessages.save(messagesFile);
                 }
@@ -56,6 +67,16 @@ public final class PluginMessages {
         }
 
         messages = loadedMessages;
+        themeColor = colorize(resolveThemeColor(loadedMessages));
+        revision++;
+    }
+
+    public String themeColor() {
+        return themeColor;
+    }
+
+    public int revision() {
+        return revision;
     }
 
     public String get(String path) {
@@ -124,8 +145,9 @@ public final class PluginMessages {
                 .replace("%" + entry.getKey() + "%", value);
         }
         for (Map.Entry<String, String> entry : tokenValues().entrySet()) {
-            formatted = formatted.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
+            formatted = replaceToken(formatted, entry);
         }
+        formatted = applyNestedTokens(formatted);
         return formatted;
     }
 
@@ -136,8 +158,9 @@ public final class PluginMessages {
             formatted = formatted.replace("{" + entry.getKey() + "}", value);
         }
         for (Map.Entry<String, String> entry : tokenValues().entrySet()) {
-            formatted = formatted.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
+            formatted = replaceToken(formatted, entry);
         }
+        formatted = applyNestedTokens(formatted);
         return formatted;
     }
 
@@ -173,7 +196,19 @@ public final class PluginMessages {
             loadedMessages,
             "prefix",
             "#03fc88FoOrders &8» #a7b8b0",
-            "#03fc88{plugin} &8» #a7b8b0"
+            "{theme}FoOrders &8» #a7b8b0"
+        );
+        changed |= replaceStringIfDefault(
+            loadedMessages,
+            "prefix",
+            "#03fc88{plugin} &8» #a7b8b0",
+            "{theme}FoOrders &8» #a7b8b0"
+        );
+        changed |= replaceStringIfDefault(
+            loadedMessages,
+            "prefix",
+            "{theme}{plugin} &8» #a7b8b0",
+            "{theme}FoOrders &8» #a7b8b0"
         );
         changed |= replaceStringIfDefault(
             loadedMessages,
@@ -191,6 +226,85 @@ public final class PluginMessages {
         }
         loadedMessages.set(path, newValue);
         return true;
+    }
+
+    private boolean migrateThemeTokenPlaceholders(YamlConfiguration loadedMessages) {
+        boolean changed = false;
+        for (String key : loadedMessages.getKeys(true)) {
+            if ("tokens.theme".equals(key) || loadedMessages.isConfigurationSection(key)) {
+                continue;
+            }
+            if (loadedMessages.isString(key)) {
+                String current = loadedMessages.getString(key, "");
+                String migrated = replaceDefaultThemeColorToken(current);
+                if (!current.equals(migrated)) {
+                    loadedMessages.set(key, migrated);
+                    changed = true;
+                }
+                continue;
+            }
+            if (loadedMessages.isList(key)) {
+                List<?> current = loadedMessages.getList(key);
+                List<Object> migrated = migrateThemeTokenList(current);
+                if (migrated != null) {
+                    loadedMessages.set(key, migrated);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private List<Object> migrateThemeTokenList(List<?> current) {
+        if (current == null || current.isEmpty()) {
+            return null;
+        }
+
+        boolean changed = false;
+        List<Object> migrated = new ArrayList<>(current.size());
+        for (Object value : current) {
+            if (value instanceof String text) {
+                String migratedText = replaceDefaultThemeColorToken(text);
+                migrated.add(migratedText);
+                changed |= !text.equals(migratedText);
+            } else {
+                migrated.add(value);
+            }
+        }
+        return changed ? migrated : null;
+    }
+
+    private String replaceDefaultThemeColorToken(String value) {
+        if (value == null || value.isBlank()) {
+            return value == null ? "" : value;
+        }
+        return DEFAULT_THEME_COLOR_PATTERN.matcher(value).replaceAll("{theme}");
+    }
+
+    private String applyNestedTokens(String formatted) {
+        Map<String, String> tokens = tokenValues();
+        for (int pass = 0; pass < 2; pass++) {
+            String before = formatted;
+            for (Map.Entry<String, String> entry : tokens.entrySet()) {
+                formatted = replaceToken(formatted, entry);
+            }
+            if (formatted.equals(before)) {
+                break;
+            }
+        }
+        return formatted;
+    }
+
+    private String replaceToken(String formatted, Map.Entry<String, String> entry) {
+        return formatted.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
+    }
+
+    private String resolveThemeColor(YamlConfiguration loadedMessages) {
+        String configured = loadedMessages.getString("tokens.theme", DEFAULT_THEME_COLOR);
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_THEME_COLOR;
+        }
+        return configured;
     }
 
     private String colorize(String message) {

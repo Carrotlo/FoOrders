@@ -11,4 +11,6 @@ interface FoOrdersItemSelectionDialogService {
     void clearCache();
 
     void clearPending(UUID playerId);
+
+    void clearAllPending();
 }
