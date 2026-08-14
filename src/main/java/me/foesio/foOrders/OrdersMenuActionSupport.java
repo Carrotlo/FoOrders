@@ -1,6 +1,9 @@
 package me.foesio.foOrders;
 
 import me.foesio.core.editor.CursorItemEditor;
+import me.foesio.core.gui.EntryBrowserClick;
+import me.foesio.core.gui.EntryBrowserHolder;
+import me.foesio.core.gui.EntryBrowserMenus;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
@@ -558,29 +561,21 @@ final class OrdersMenuActionSupport {
         }
     }
 
-    void handleAdminItemEditorClick(Player player, int rawSlot, ClickType clickType) {
+    void handleAdminItemEditorBrowserClick(Player player, int rawSlot, ClickType clickType, EntryBrowserHolder holder) {
         if (!canModerateOrders(player)) {
             openOrdersMenu(player, null);
             return;
         }
 
+        EntryBrowserClick click = EntryBrowserMenus.handleClick(rawSlot, holder, clickType);
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
-        List<CustomItemStore.CustomItemDefinition> customItems = getSortedCustomItems();
-        int pageCount = Math.max(1, (int) Math.ceil(customItems.size() / 45D));
-        if (viewState.adminEditorPage < 1) {
-            viewState.adminEditorPage = 1;
-        }
-        if (viewState.adminEditorPage > pageCount) {
-            viewState.adminEditorPage = pageCount;
-        }
-
-        if (rawSlot >= 0 && rawSlot < 45) {
-            int itemIndex = (viewState.adminEditorPage - 1) * 45 + rawSlot;
-            if (itemIndex < 0 || itemIndex >= customItems.size()) {
-                return;
-            }
-
-            CustomItemStore.CustomItemDefinition selected = customItems.get(itemIndex);
+        switch (click.action()) {
+            case ENTRY -> {
+                CustomItemStore.CustomItemDefinition selected = customItemStore.get(click.entryId());
+                if (selected == null) {
+                    openAdminItemEditorMenu(player, false);
+                    return;
+                }
             if (clickType == ClickType.SHIFT_RIGHT) {
                 if (isCustomItemInUse(selected.id())) {
                     manager.messages().send(player, "custom-items.in-use");
@@ -598,24 +593,27 @@ final class OrdersMenuActionSupport {
 
             viewState.adminItemDraft = AdminItemDraft.fromDefinition(selected);
             openAdminItemEditMenu(player);
-            return;
-        }
-
-        if (rawSlot == ADMIN_EDITOR_ADD_SLOT) {
-            viewState.adminItemDraft = AdminItemDraft.newDraft(generateUniqueCustomItemId("custom_item"));
-            openAdminItemEditMenu(player);
-            return;
-        }
-
-        if (rawSlot == ADMIN_EDITOR_BACK_SLOT && viewState.adminEditorPage > 1) {
-            viewState.adminEditorPage--;
-            openAdminItemEditorMenu(player, false);
-            return;
-        }
-
-        if (rawSlot == ADMIN_EDITOR_NEXT_SLOT && viewState.adminEditorPage < pageCount) {
-            viewState.adminEditorPage++;
-            openAdminItemEditorMenu(player, false);
+            }
+            case ADD -> {
+                viewState.adminItemDraft = AdminItemDraft.newDraft(generateUniqueCustomItemId("custom_item"));
+                openAdminItemEditMenu(player);
+            }
+            case SEARCH -> interaction.inputSupport.openAdminItemSearch(player);
+            case CLEAR_SEARCH -> {
+                viewState.adminEditorSearch = "";
+                viewState.adminEditorPage = 0;
+                openAdminItemEditorMenu(player, false);
+            }
+            case PREVIOUS_PAGE -> {
+                viewState.adminEditorPage = Math.max(0, holder.request().page() - 1);
+                openAdminItemEditorMenu(player, false);
+            }
+            case NEXT_PAGE -> {
+                viewState.adminEditorPage = Math.min(holder.maxPage(), holder.request().page() + 1);
+                openAdminItemEditorMenu(player, false);
+            }
+            case BACK, NONE -> {
+            }
         }
     }
 

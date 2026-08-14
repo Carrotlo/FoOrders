@@ -168,6 +168,45 @@ final class OrdersMenuInputSupport {
         }
     }
 
+    void openAdminItemSearch(Player player) {
+        UUID playerId = player.getUniqueId();
+        MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
+        FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
+        if (dialogInputService == null) {
+            return;
+        }
+
+        boolean suppressInventoryClose = manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
+        if (suppressInventoryClose) {
+            inventoryCloseSuppressor.suppressNextClose(player);
+        }
+        if (dialogInputService.willUseFallback()) {
+            warnNativeDialogFallback(player);
+        }
+
+        boolean opened = dialogInputService.openInput(
+            player,
+            SignInputType.MAIN_SEARCH,
+            viewState.adminEditorSearch,
+            "Custom items",
+            value -> {
+                viewState.adminEditorSearch = value == null ? "" : value.trim();
+                viewState.adminEditorPage = 0;
+                manager.viewSupport.openAdminItemEditorMenu(player, false);
+            },
+            () -> manager.viewSupport.openAdminItemEditorMenu(player, false)
+        );
+        if (opened) {
+            if (suppressInventoryClose) {
+                scheduler.runLaterForPlayer(player, () -> inventoryCloseSuppressor.clear(player), NATIVE_DIALOG_CLOSE_SUPPRESSION_TICKS);
+            }
+            return;
+        }
+        if (manager.isOrdersMenu(player.getOpenInventory().getTopInventory())) {
+            inventoryCloseSuppressor.clear(player);
+        }
+    }
+
     private void warnNativeDialogFallback(Player player) {
         FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
         if (dialogInputService == null

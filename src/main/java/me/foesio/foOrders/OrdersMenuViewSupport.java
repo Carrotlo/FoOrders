@@ -1,6 +1,8 @@
 package me.foesio.foOrders;
 
 import me.foesio.foOrders.config.GuiConfigManager;
+import me.foesio.core.gui.EntryBrowserMenus;
+import me.foesio.core.gui.EntryBrowserRequest;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.dialog.EnchantDialogAction;
 import me.foesio.foOrders.dialog.EnchantDialogRequest;
@@ -953,7 +955,8 @@ final class OrdersMenuViewSupport {
             return;
         }
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
-        viewState.adminEditorPage = 1;
+        viewState.adminEditorPage = 0;
+        viewState.adminEditorSearch = "";
         viewState.adminItemDraft = null;
         openAdminItemEditorMenu(player, true);
     }
@@ -969,56 +972,55 @@ final class OrdersMenuViewSupport {
             viewState.adminEditorPage = 1;
         }
 
-        List<CustomItemStore.CustomItemDefinition> customItems = getSortedCustomItems();
-        int pageCount = Math.max(1, (int) Math.ceil(customItems.size() / 45D));
-        if (viewState.adminEditorPage < 1) {
-            viewState.adminEditorPage = 1;
-        }
-        if (viewState.adminEditorPage > pageCount) {
-            viewState.adminEditorPage = pageCount;
+        List<CustomItemStore.CustomItemDefinition> customItems = getFilteredAdminCustomItems(viewState.adminEditorSearch);
+        List<EntryBrowserRequest.Entry> entries = new ArrayList<>(customItems.size());
+        for (CustomItemStore.CustomItemDefinition customItem : customItems) {
+            entries.add(EntryBrowserRequest.Entry.of(customItem.id(), createAdminCustomItemListEntry(customItem)));
         }
 
-        Inventory menu = createMenu(MenuType.ADMIN_ITEM_EDITOR, 54, TITLE_ADMIN_EDITOR + " (" + viewState.adminEditorPage + ")");
-        int startIndex = (viewState.adminEditorPage - 1) * 45;
-        for (int slot = 0; slot < 45; slot++) {
-            int itemIndex = startIndex + slot;
-            if (itemIndex >= customItems.size()) {
-                break;
-            }
-            menu.setItem(slot, createAdminCustomItemListEntry(customItems.get(itemIndex)));
-        }
-
-        if (viewState.adminEditorPage > 1) {
-            menu.setItem(ADMIN_EDITOR_BACK_SLOT, createSimpleItem(Material.ARROW, ACCENT + "ʙᴀᴄᴋ", List.of(WHITE + "Click to go to the previous page")));
-        }
-        if (viewState.adminEditorPage < pageCount) {
-            menu.setItem(ADMIN_EDITOR_NEXT_SLOT, createSimpleItem(Material.ARROW, ACCENT + "ɴᴇxᴛ", List.of(WHITE + "Click to go to the next page")));
-        }
-
-        menu.setItem(
-            ADMIN_EDITOR_ADD_SLOT,
-            createSimpleItem(
-                Material.LIME_STAINED_GLASS_PANE,
+        EntryBrowserRequest request = EntryBrowserRequest.builder()
+            .title(TITLE_ADMIN_EDITOR)
+            .entries(entries)
+            .page(viewState.adminEditorPage)
+            .filter(viewState.adminEditorSearch)
+            .buttons(manager.guiButtons())
+            .showBack(false)
+            .addButton(createSimpleItem(
+                Material.ANVIL,
                 CONFIRM_GREEN + "ᴀᴅᴅ ɪᴛᴇᴍ",
                 List.of(
                     WHITE + "Create a new custom order item",
                     MUTED + "Includes name, lore, model data, enchants, etc."
                 )
-            )
-        );
-        menu.setItem(
-            ADMIN_EDITOR_INFO_SLOT,
-            createSimpleItem(
-                Material.OAK_SIGN,
-                ACCENT + "ᴄᴏɴᴛʀᴏʟꜱ",
-                List.of(
-                    WHITE + "Left click: Edit item",
-                    WHITE + "Shift + Right click: Remove item"
-                )
-            )
-        );
+            ))
+            .emptyItem(createSimpleItem(Material.PAPER, MUTED + "ɴᴏ ᴄᴜꜱᴛᴏᴍ ɪᴛᴇᴍꜱ", List.of(
+                WHITE + "Create one with the Anvil button"
+            )))
+            .context(new AdminCustomItemBrowserContext())
+            .build();
 
-        openMenu(player, menu);
+        int maxPage = EntryBrowserMenus.maxPage(request);
+        viewState.adminEditorPage = Math.max(0, Math.min(viewState.adminEditorPage, maxPage));
+        openMenu(player, EntryBrowserMenus.createInventory(request.withPage(viewState.adminEditorPage)));
+    }
+
+    private List<CustomItemStore.CustomItemDefinition> getFilteredAdminCustomItems(String rawFilter) {
+        String filter = rawFilter == null ? "" : rawFilter.trim().toLowerCase(Locale.ROOT);
+        List<CustomItemStore.CustomItemDefinition> customItems = getSortedCustomItems();
+        if (filter.isBlank()) {
+            return customItems;
+        }
+
+        List<CustomItemStore.CustomItemDefinition> filtered = new ArrayList<>();
+        for (CustomItemStore.CustomItemDefinition customItem : customItems) {
+            String searchable = customItem.id() + " "
+                + resolveTemplateDisplayName(customItem.template()) + " "
+                + customItem.template().getType().name();
+            if (searchable.toLowerCase(Locale.ROOT).contains(filter)) {
+                filtered.add(customItem);
+            }
+        }
+        return filtered;
     }
 
     void openAdminItemEditMenu(Player player) {
@@ -1108,7 +1110,7 @@ final class OrdersMenuViewSupport {
         );
         menu.setItem(
             ADMIN_EDIT_CANCEL_SLOT,
-            createSimpleItem(Material.RED_STAINED_GLASS_PANE, CANCEL_RED + "ʙᴀᴄᴋ", List.of(WHITE + "Return to editor list"))
+            manager.guiButtons().back()
         );
 
         if (draft.existingId() != null) {

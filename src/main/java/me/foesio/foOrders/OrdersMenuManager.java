@@ -1,6 +1,7 @@
 package me.foesio.foOrders;
 
 import me.foesio.core.dialog.DialogService;
+import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.gui.GuiButtonConfig;
@@ -136,11 +137,6 @@ public final class OrdersMenuManager implements Listener {
     static final int ADMIN_PREVIEW_SLOT = 4;
     static final int ADMIN_DELETE_SLOT = 11;
     static final int ADMIN_CANCEL_SLOT = 15;
-
-    static final int ADMIN_EDITOR_BACK_SLOT = 45;
-    static final int ADMIN_EDITOR_ADD_SLOT = 49;
-    static final int ADMIN_EDITOR_INFO_SLOT = 50;
-    static final int ADMIN_EDITOR_NEXT_SLOT = 53;
 
     static final int ADMIN_EDIT_ID_SLOT = 10;
     static final int ADMIN_EDIT_COPY_HAND_SLOT = 11;
@@ -417,7 +413,11 @@ public final class OrdersMenuManager implements Listener {
         if (inventory == null) {
             return false;
         }
-        return inventory.getHolder() instanceof OrdersMenuHolder;
+        if (inventory.getHolder() instanceof OrdersMenuHolder) {
+            return true;
+        }
+        return inventory.getHolder() instanceof EntryBrowserHolder holder
+            && holder.request().context() instanceof AdminCustomItemBrowserContext;
     }
 
     public void initializeOnlinePlayers() {

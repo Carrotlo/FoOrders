@@ -1,6 +1,7 @@
 package me.foesio.foOrders;
 
 import me.foesio.core.inventory.InventoryCloseSuppressor;
+import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
@@ -100,6 +101,14 @@ final class OrdersMenuInteractionSupport {
         }
 
         InventoryHolder holder = topInventory.getHolder();
+        if (holder instanceof EntryBrowserHolder entryBrowserHolder) {
+            if (!(event.getWhoClicked() instanceof Player player)) {
+                return;
+            }
+            event.setCancelled(true);
+            actionSupport.handleAdminItemEditorBrowserClick(player, event.getRawSlot(), event.getClick(), entryBrowserHolder);
+            return;
+        }
         if (!(holder instanceof OrdersMenuHolder menuHolder)) {
             return;
         }
@@ -138,7 +147,6 @@ final class OrdersMenuInteractionSupport {
             case DELIVERY_CONFIRM -> deliverySupport.handleDeliveryConfirmClick(player, event.getRawSlot());
             case HISTORY -> actionSupport.handleHistoryClick(player, event.getRawSlot());
             case ADMIN_ORDER_ACTIONS -> actionSupport.handleAdminOrderActionClick(player, event.getRawSlot());
-            case ADMIN_ITEM_EDITOR -> actionSupport.handleAdminItemEditorClick(player, event.getRawSlot(), event.getClick());
             case ADMIN_ITEM_EDIT -> actionSupport.handleAdminItemEditClick(player, event);
             case DELIVER -> {
             }
@@ -148,6 +156,10 @@ final class OrdersMenuInteractionSupport {
     void onInventoryDrag(InventoryDragEvent event) {
         Inventory topInventory = event.getView().getTopInventory();
         if (!manager.isOrdersMenu(topInventory)) {
+            return;
+        }
+        if (topInventory.getHolder() instanceof EntryBrowserHolder) {
+            event.setCancelled(true);
             return;
         }
         if (topInventory.getHolder() instanceof OrdersMenuHolder holder && holder.getMenuType() == MenuType.DELIVER) {
@@ -180,6 +192,9 @@ final class OrdersMenuInteractionSupport {
         clearSearches(playerId);
 
         InventoryHolder holder = topInventory.getHolder();
+        if (holder instanceof EntryBrowserHolder) {
+            return;
+        }
         if (!(holder instanceof OrdersMenuHolder menuHolder)) {
             return;
         }
@@ -341,6 +356,8 @@ final class OrdersMenuInteractionSupport {
             viewState.itemSelectState.search = "";
             viewState.itemSelectState.page = 1;
         }
+        viewState.adminEditorSearch = "";
+        viewState.adminEditorPage = 0;
     }
 
     void onPlayerSwapHand(PlayerSwapHandItemsEvent event) {

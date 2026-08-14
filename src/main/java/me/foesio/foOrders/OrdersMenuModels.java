@@ -39,7 +39,8 @@ final class MenuViewState {
     int claimPage = 1;
     int enchantPage = 1;
     int historyPage = 1;
-    int adminEditorPage = 1;
+    int adminEditorPage;
+    String adminEditorSearch = "";
     boolean newOrderConfirmLocked = false;
     String claimSessionOrderId;
     List<Integer> claimSessionStacks;
@@ -192,6 +193,9 @@ record AdminItemDraft(String existingId, String itemId, ItemStack template, bool
     AdminItemDraft withItemId(String newItemId) {
         return new AdminItemDraft(existingId, newItemId, template, allowOrderEnchants);
     }
+}
+
+record AdminCustomItemBrowserContext() {
 }
 
 final class OrdersMenuHolder implements InventoryHolder {
