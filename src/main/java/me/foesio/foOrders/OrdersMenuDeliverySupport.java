@@ -659,13 +659,13 @@ final class OrdersMenuDeliverySupport {
             return;
         }
 
-        Bukkit.broadcastMessage(manager.messages().get("orders.created-broadcast", Map.of(
+        Bukkit.broadcast(manager.messages().get("orders.created-broadcast", Map.of(
             "player", player.getName(),
             "amount", formatCompactAmount(order.getAmountOrdered()),
             "item", formatOrderDisplayName(order),
             "price", formatCompactAmount(order.getPricePerItem()),
             "total", formatCompactAmount(totalCost)
-        )));
+        )), CREATED_ORDER_ANNOUNCEMENTS_PERMISSION);
     }
 
     void sendOrderCancelledWebhook(Player player, PlayerDataStore.OrderEntry order, double refundedAmount) {

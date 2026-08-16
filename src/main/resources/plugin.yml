@@ -25,6 +25,9 @@ permissions:
   foorders.admin:
     description: Allows using FoOrders admin commands and editor
     default: op
+  foorders.receive-created-order-announcements:
+    description: Allows seeing chat announcements when new orders are created
+    default: true
   foorders.maxorders.*:
     description: Allows setting max order limits via foorders.maxorders.<amount>
     default: op

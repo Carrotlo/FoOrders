@@ -154,6 +154,7 @@ public final class OrdersMenuManager implements Listener {
     static final int HISTORY_NEXT_SLOT = 53;
 
     static final String ADMIN_PERMISSION = "foorders.admin";
+    static final String CREATED_ORDER_ANNOUNCEMENTS_PERMISSION = "foorders.receive-created-order-announcements";
 
     static final List<String> SORT_OPTIONS = List.of(
         "Most Paid",
