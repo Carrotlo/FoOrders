@@ -414,6 +414,7 @@ final class OrdersMenuViewSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         clearAdminTarget(viewState);
         viewState.manageOrderIndex = -1;
+        viewState.manageOrderId = null;
         viewState.claimPage = 1;
         clearClaimSession(viewState);
         int playerMaxOrders = getMaxOrdersForPlayer(player);
@@ -804,6 +805,7 @@ final class OrdersMenuViewSupport {
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         if (orderIndex < 0 || orderIndex >= playerData.getOrders().size()) {
             viewState.manageOrderIndex = -1;
+            viewState.manageOrderId = null;
             openYourOrdersMenu(player);
             return;
         }
@@ -811,6 +813,7 @@ final class OrdersMenuViewSupport {
         viewState.manageOrderIndex = orderIndex;
         viewState.claimPage = 1;
         PlayerDataStore.OrderEntry order = playerData.getOrders().get(orderIndex);
+        viewState.manageOrderId = order.getOrderId();
 
         int inventorySize = 27;
         int cancelSlot = guiItemSlot("manage-order.cancel", MANAGE_CANCEL_SLOT, inventorySize);
@@ -1154,6 +1157,7 @@ final class OrdersMenuViewSupport {
 
     void openDeliverMenu(Player player, MainOrderView selectedOrder) {
         UUID delivererId = player.getUniqueId();
+        manager.handledDeliveryClosePlayers.remove(delivererId);
         PendingDeliveryState previous = pendingDeliveries.remove(delivererId);
         waitingDeliveryPlayers.remove(delivererId);
         if (previous != null) {

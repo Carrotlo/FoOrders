@@ -36,6 +36,7 @@ final class MenuViewState {
     String search = "";
     List<MainOrderView> visibleMainOrders;
     int manageOrderIndex = -1;
+    String manageOrderId;
     int claimPage = 1;
     int enchantPage = 1;
     int historyPage = 1;

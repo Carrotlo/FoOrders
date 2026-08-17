@@ -27,6 +27,7 @@ final class OrdersMenuInputSupport {
     private final Map<UUID, MenuViewState> menuStates;
     private final InventoryCloseSuppressor inventoryCloseSuppressor;
     private final Map<UUID, PendingDeliveryState> pendingDeliveries;
+    private final Set<UUID> handledDeliveryClosePlayers;
     private final Set<UUID> waitingDeliveryPlayers;
     private final Set<UUID> nativeDialogFallbackWarnings = ConcurrentHashMap.newKeySet();
     private final PlayerDataStore playerDataStore;
@@ -39,6 +40,7 @@ final class OrdersMenuInputSupport {
         this.menuStates = manager.menuStates;
         this.inventoryCloseSuppressor = manager.inventoryCloseSuppressor;
         this.pendingDeliveries = manager.pendingDeliveries;
+        this.handledDeliveryClosePlayers = manager.handledDeliveryClosePlayers;
         this.waitingDeliveryPlayers = manager.waitingDeliveryPlayers;
         this.playerDataStore = manager.playerDataStore;
         this.historyDataStore = manager.historyDataStore;
@@ -111,6 +113,7 @@ final class OrdersMenuInputSupport {
     void onPlayerQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
         PendingDeliveryState pendingDeliveryState = pendingDeliveries.remove(playerId);
+        handledDeliveryClosePlayers.remove(playerId);
         if (pendingDeliveryState != null) {
             interaction.deliverySupport.returnPendingItems(event.getPlayer(), pendingDeliveryState.submittedItems());
         }

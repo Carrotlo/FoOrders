@@ -22,6 +22,7 @@ import org.bukkit.Tag;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -211,7 +212,8 @@ public final class OrdersMenuManager implements Listener {
     final AtomicInteger itemSelectRefreshSequence = new AtomicInteger();
     final AtomicInteger itemSelectContentRevision = new AtomicInteger();
     final Map<UUID, PendingDeliveryState> pendingDeliveries = new ConcurrentHashMap<>();
-    final Set<String> activeDeliveryOrderLocks = ConcurrentHashMap.newKeySet();
+    final Set<UUID> handledDeliveryClosePlayers = ConcurrentHashMap.newKeySet();
+    final Set<String> activeOrderOperationLocks = ConcurrentHashMap.newKeySet();
     final Set<UUID> waitingDeliveryPlayers = ConcurrentHashMap.newKeySet();
     final Object economyLock = new Object();
     volatile Set<Material> blacklistedOrderMaterials = Set.of();
@@ -372,12 +374,12 @@ public final class OrdersMenuManager implements Listener {
         interactionSupport.returnPendingItems(player, submittedItems);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryClick(InventoryClickEvent event) {
         interactionSupport.onInventoryClick(event);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryDrag(InventoryDragEvent event) {
         interactionSupport.onInventoryDrag(event);
     }
@@ -552,6 +554,7 @@ public final class OrdersMenuManager implements Listener {
         fileLogger.info("Saving all FoOrders data.");
         for (Map.Entry<UUID, PendingDeliveryState> entry : new ArrayList<>(pendingDeliveries.entrySet())) {
             PendingDeliveryState pending = pendingDeliveries.remove(entry.getKey());
+            handledDeliveryClosePlayers.remove(entry.getKey());
             Player player = Bukkit.getPlayer(entry.getKey());
             if (player != null && pending != null) {
                 returnPendingItems(player, pending.submittedItems());

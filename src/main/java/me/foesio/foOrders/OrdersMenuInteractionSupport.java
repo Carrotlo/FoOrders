@@ -25,6 +25,7 @@ import org.bukkit.permissions.PermissionAttachmentInfo;
 import java.util.Locale;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static me.foesio.foOrders.OrdersMenuManager.*;
@@ -35,6 +36,7 @@ final class OrdersMenuInteractionSupport {
     private final Map<UUID, MenuViewState> menuStates;
     private final InventoryCloseSuppressor inventoryCloseSuppressor;
     private final Map<UUID, PendingDeliveryState> pendingDeliveries;
+    private final Set<UUID> handledDeliveryClosePlayers;
     private final PlayerDataStore playerDataStore;
     private final HistoryDataStore historyDataStore;
     final OrdersMenuInputSupport inputSupport;
@@ -47,6 +49,7 @@ final class OrdersMenuInteractionSupport {
         this.menuStates = manager.menuStates;
         this.inventoryCloseSuppressor = manager.inventoryCloseSuppressor;
         this.pendingDeliveries = manager.pendingDeliveries;
+        this.handledDeliveryClosePlayers = manager.handledDeliveryClosePlayers;
         this.playerDataStore = manager.playerDataStore;
         this.historyDataStore = manager.historyDataStore;
         this.inputSupport = new OrdersMenuInputSupport(manager, this);
@@ -270,10 +273,8 @@ final class OrdersMenuInteractionSupport {
                 if (!player.isOnline()) {
                     return;
                 }
-                PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
                 MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
-                deliverySupport.removeOrderIfCompleted(playerData, viewState);
-                playerDataStore.save(playerId);
+                deliverySupport.finishClaimSession(playerId, viewState);
                 if (viewState.manageOrderIndex >= 0) {
                     manager.viewSupport.openManageOrderMenu(player, viewState.manageOrderIndex);
                 } else {
@@ -284,6 +285,9 @@ final class OrdersMenuInteractionSupport {
         }
 
         if (menuHolder.getMenuType() == MenuType.DELIVER) {
+            if (!handledDeliveryClosePlayers.add(playerId)) {
+                return;
+            }
             PendingDeliveryState pending = pendingDeliveries.get(playerId);
             ItemStack[] submitted = deliverySupport.cloneContents(topInventory.getContents());
             topInventory.clear();

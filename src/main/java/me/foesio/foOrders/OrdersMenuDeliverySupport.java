@@ -33,7 +33,7 @@ final class OrdersMenuDeliverySupport {
     private final FoScheduler scheduler;
     private final Map<UUID, MenuViewState> menuStates;
     private final Map<UUID, PendingDeliveryState> pendingDeliveries;
-    private final Set<String> activeDeliveryOrderLocks;
+    private final Set<String> activeOrderOperationLocks;
     private final Set<UUID> waitingDeliveryPlayers;
     private final Object economyLock;
     private final PlayerDataStore playerDataStore;
@@ -47,7 +47,7 @@ final class OrdersMenuDeliverySupport {
         this.scheduler = manager.scheduler;
         this.menuStates = manager.menuStates;
         this.pendingDeliveries = manager.pendingDeliveries;
-        this.activeDeliveryOrderLocks = manager.activeDeliveryOrderLocks;
+        this.activeOrderOperationLocks = manager.activeOrderOperationLocks;
         this.waitingDeliveryPlayers = manager.waitingDeliveryPlayers;
         this.economyLock = manager.economyLock;
         this.playerDataStore = manager.playerDataStore;
@@ -66,6 +66,33 @@ final class OrdersMenuDeliverySupport {
 
     private void openOrdersMenu(Player player, String searchText) {
         manager.viewSupport.openOrdersMenu(player, searchText);
+    }
+
+    private boolean tryAcquireOrderOperation(String orderId) {
+        return orderId != null && !orderId.isBlank() && activeOrderOperationLocks.add(orderId);
+    }
+
+    private void releaseOrderOperation(String orderId) {
+        if (orderId != null && !orderId.isBlank()) {
+            activeOrderOperationLocks.remove(orderId);
+        }
+    }
+
+    private PlayerDataStore.OrderEntry resolveSelectedOrder(
+        PlayerDataStore.PlayerData playerData,
+        MenuViewState viewState,
+        String orderId
+    ) {
+        int orderIndex = findOrderIndexById(playerData, orderId);
+        if (orderIndex < 0) {
+            viewState.manageOrderIndex = -1;
+            viewState.manageOrderId = null;
+            clearClaimSession(viewState);
+            return null;
+        }
+        viewState.manageOrderIndex = orderIndex;
+        viewState.manageOrderId = orderId;
+        return playerData.getOrders().get(orderIndex);
     }
 
     PendingDeliveryState removePendingDelivery(UUID playerId) {
@@ -173,47 +200,65 @@ final class OrdersMenuDeliverySupport {
             return;
         }
 
-        int absoluteStackIndex = (viewState.claimPage - 1) * CLAIM_PAGE_CAPACITY + rawSlot;
-        if (absoluteStackIndex < 0 || absoluteStackIndex >= claimSessionStacks.size()) {
+        String orderId = selectedOrder.getOrderId();
+        if (!tryAcquireOrderOperation(orderId)) {
             openClaimOrderMenu(player, false);
             return;
         }
 
-        int availableInSession = Math.max(0, claimSessionStacks.get(absoluteStackIndex));
-        int requestedAmount = Math.min(clickedItem.getAmount(), Math.min(selectedOrder.getAmountClaimable(), availableInSession));
-        if (requestedAmount <= 0) {
-            openClaimOrderMenu(player, false);
-            return;
-        }
+        try {
+            playerData = playerDataStore.getOrCreate(playerId);
+            selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
+            if (selectedOrder == null) {
+                openYourOrdersMenu(player);
+                return;
+            }
 
-        int transferred = transferClaimedItemsToPlayer(player, selectedOrder, requestedAmount);
-        if (transferred <= 0) {
-            return;
-        }
+            claimSessionStacks = initializeClaimSessionStacks(viewState, selectedOrder, false);
+            int absoluteStackIndex = (viewState.claimPage - 1) * CLAIM_PAGE_CAPACITY + rawSlot;
+            if (absoluteStackIndex < 0 || absoluteStackIndex >= claimSessionStacks.size()) {
+                openClaimOrderMenu(player, false);
+                return;
+            }
 
-        selectedOrder.setAmountClaimable(Math.max(0, selectedOrder.getAmountClaimable() - transferred));
-        claimSessionStacks.set(absoluteStackIndex, Math.max(0, availableInSession - transferred));
-        boolean removed = removeOrderIfCompleted(playerData, viewState);
-        if (removed) {
-            clearClaimSession(viewState);
-        }
-        playerDataStore.saveUrgent(playerId);
-        appendOrderHistory(
-            playerId,
-            "Order Claimed",
-            "Claimed " + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder) + " (Inventory)"
-        );
-        manager.fileLogger().info(
-            "Player " + player.getName() + " claimed "
-                + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder)
-                + " from order " + selectedOrder.getOrderId() + "."
-        );
-        sendOrderClaimedWebhook(player, selectedOrder, transferred, "Inventory");
+            int availableInSession = Math.max(0, claimSessionStacks.get(absoluteStackIndex));
+            int requestedAmount = Math.min(clickedItem.getAmount(), Math.min(selectedOrder.getAmountClaimable(), availableInSession));
+            if (requestedAmount <= 0) {
+                openClaimOrderMenu(player, false);
+                return;
+            }
 
-        if (!removed && viewState.manageOrderIndex >= 0) {
-            openClaimOrderMenu(player, false);
-        } else {
-            openYourOrdersMenu(player);
+            int transferred = transferClaimedItemsToPlayer(player, selectedOrder, requestedAmount);
+            if (transferred <= 0) {
+                return;
+            }
+
+            selectedOrder.setAmountClaimable(Math.max(0, selectedOrder.getAmountClaimable() - transferred));
+            claimSessionStacks.set(absoluteStackIndex, Math.max(0, availableInSession - transferred));
+            boolean removed = removeOrderIfCompleted(playerData, viewState);
+            if (removed) {
+                clearClaimSession(viewState);
+            }
+            playerDataStore.saveUrgent(playerId);
+            appendOrderHistory(
+                playerId,
+                "Order Claimed",
+                "Claimed " + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder) + " (Inventory)"
+            );
+            manager.fileLogger().info(
+                "Player " + player.getName() + " claimed "
+                    + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder)
+                    + " from order " + selectedOrder.getOrderId() + "."
+            );
+            sendOrderClaimedWebhook(player, selectedOrder, transferred, "Inventory");
+
+            if (!removed && viewState.manageOrderIndex >= 0) {
+                openClaimOrderMenu(player, false);
+            } else {
+                openYourOrdersMenu(player);
+            }
+        } finally {
+            releaseOrderOperation(orderId);
         }
     }
 
@@ -255,7 +300,7 @@ final class OrdersMenuDeliverySupport {
             return;
         }
 
-        if (!activeDeliveryOrderLocks.add(pending.orderId())) {
+        if (!tryAcquireOrderOperation(pending.orderId())) {
             waitingDeliveryPlayers.add(playerId);
             sendDeliveringActionbar(player, animationStep);
             scheduler.runLaterForPlayer(player, () -> waitAndProcessDeliveryConfirmation(player, pending, (animationStep + 1) % 3), 6L);
@@ -266,7 +311,7 @@ final class OrdersMenuDeliverySupport {
         try {
             processDeliveryConfirmation(player, current);
         } finally {
-            activeDeliveryOrderLocks.remove(pending.orderId());
+            releaseOrderOperation(pending.orderId());
         }
     }
 
@@ -501,140 +546,189 @@ final class OrdersMenuDeliverySupport {
         MenuViewState viewState,
         PlayerDataStore.OrderEntry selectedOrder
     ) {
-        if (selectedOrder.isCancelled()) {
+        String orderId = selectedOrder.getOrderId();
+        if (!tryAcquireOrderOperation(orderId)) {
             openManageOrderMenu(player, viewState.manageOrderIndex);
             return;
         }
 
-        double refundedAmount = getRemainingOrderFunds(selectedOrder);
-        if (!refundRemainingOrderFunds(player.getUniqueId(), selectedOrder)) {
-            sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
-            return;
-        }
+        try {
+            playerData = playerDataStore.getOrCreate(player.getUniqueId());
+            selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
+            if (selectedOrder == null) {
+                openYourOrdersMenu(player);
+                return;
+            }
+            if (selectedOrder.isCancelled()) {
+                openManageOrderMenu(player, viewState.manageOrderIndex);
+                return;
+            }
 
-        selectedOrder.setCancelled(true);
-        sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
-        manager.messages().send(player, "orders.cancelled");
-        appendOrderHistory(
-            player.getUniqueId(),
-            "Order Cancelled",
-            formatOrderDisplayName(selectedOrder) + " refunded $" + formatCompactAmount(refundedAmount)
-        );
-        manager.fileLogger().info(
-            "Player " + player.getName() + " cancelled order " + selectedOrder.getOrderId()
-                + " with refund $" + formatCompactAmount(refundedAmount) + "."
-        );
-        boolean removed = removeOrderIfCompleted(playerData, viewState);
-        playerDataStore.saveUrgent(player.getUniqueId());
-        sendOrderCancelledWebhook(player, selectedOrder, refundedAmount);
-        if (removed) {
-            openYourOrdersMenu(player);
-            return;
+            double refundedAmount = getRemainingOrderFunds(selectedOrder);
+            if (!refundRemainingOrderFunds(player.getUniqueId(), selectedOrder)) {
+                sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
+                return;
+            }
+
+            selectedOrder.setCancelled(true);
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
+            manager.messages().send(player, "orders.cancelled");
+            appendOrderHistory(
+                player.getUniqueId(),
+                "Order Cancelled",
+                formatOrderDisplayName(selectedOrder) + " refunded $" + formatCompactAmount(refundedAmount)
+            );
+            manager.fileLogger().info(
+                "Player " + player.getName() + " cancelled order " + selectedOrder.getOrderId()
+                    + " with refund $" + formatCompactAmount(refundedAmount) + "."
+            );
+            boolean removed = removeOrderIfCompleted(playerData, viewState);
+            playerDataStore.saveUrgent(player.getUniqueId());
+            sendOrderCancelledWebhook(player, selectedOrder, refundedAmount);
+            if (removed) {
+                openYourOrdersMenu(player);
+                return;
+            }
+            openManageOrderMenu(player, viewState.manageOrderIndex);
+        } finally {
+            releaseOrderOperation(orderId);
         }
-        openManageOrderMenu(player, viewState.manageOrderIndex);
     }
 
     void handleAdminDeleteOrder(Player player, MenuViewState viewState, AdminOrderTarget target) {
-        boolean selfModeration = target.ownerId().equals(player.getUniqueId());
-        double remainingFunds = getRemainingOrderFunds(target.order());
-        if (!refundRemainingOrderFunds(target.ownerId(), target.order())) {
-            sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
+        String orderId = target.order().getOrderId();
+        if (!tryAcquireOrderOperation(orderId)) {
             return;
         }
 
-        boolean removed = target.ownerData().getOrders().remove(target.order());
-        if (!removed) {
-            clearAdminTarget(viewState);
-            openOrdersMenu(player, null);
-            return;
-        }
-
-        String ownerName = resolvePlayerName(target.ownerId());
-        String orderName = formatOrderDisplayName(target.order());
-        playerDataStore.saveUrgent(target.ownerId());
-        appendOrderHistory(
-            target.ownerId(),
-            "Order Deleted by Admin",
-            player.getName() + " deleted " + orderName + " (Refund $" + formatCompactAmount(remainingFunds) + ")"
-        );
-        manager.fileLogger().info(
-            "Admin " + player.getName() + " deleted order " + target.order().getOrderId()
-                + " owned by " + ownerName
-                + " with refund $" + formatCompactAmount(remainingFunds) + "."
-        );
-        sendAdminOrderDeletedWebhook(player, ownerName, target.order(), remainingFunds);
-        clearAdminTarget(viewState);
-        if (selfModeration) {
-            manager.messages().send(player, "orders.deleted-self", PluginMessages.placeholders("order", orderName));
-        } else {
-            manager.messages().send(player, "orders.deleted-other", PluginMessages.placeholders(
-                "owner", ownerName,
-                "order", orderName
-            ));
-        }
-
-        Player owner = Bukkit.getPlayer(target.ownerId());
-        if (!selfModeration && owner != null && owner.isOnline()) {
-            manager.messages().send(owner, "orders.owner-deleted", PluginMessages.placeholders(
-                "order", orderName,
-                "admin", player.getName()
-            ));
-            if (remainingFunds > 0D) {
-                manager.messages().send(owner, "orders.refunded", PluginMessages.placeholders("amount", formatCompactAmount(remainingFunds)));
+        try {
+            PlayerDataStore.PlayerData ownerData = playerDataStore.getOrCreate(target.ownerId());
+            PlayerDataStore.OrderEntry liveOrder = findOrderById(ownerData, orderId);
+            if (liveOrder == null) {
+                clearAdminTarget(viewState);
+                openOrdersMenu(player, null);
+                return;
             }
+            target = new AdminOrderTarget(target.ownerId(), ownerData, liveOrder);
+
+            boolean selfModeration = target.ownerId().equals(player.getUniqueId());
+            double remainingFunds = target.order().isCancelled() ? 0D : getRemainingOrderFunds(target.order());
+            if (remainingFunds > 0D && !refundRemainingOrderFunds(target.ownerId(), target.order())) {
+                sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
+                return;
+            }
+
+            boolean removed = target.ownerData().getOrders().remove(target.order());
+            if (!removed) {
+                clearAdminTarget(viewState);
+                openOrdersMenu(player, null);
+                return;
+            }
+
+            String ownerName = resolvePlayerName(target.ownerId());
+            String orderName = formatOrderDisplayName(target.order());
+            playerDataStore.saveUrgent(target.ownerId());
+            appendOrderHistory(
+                target.ownerId(),
+                "Order Deleted by Admin",
+                player.getName() + " deleted " + orderName + " (Refund $" + formatCompactAmount(remainingFunds) + ")"
+            );
+            manager.fileLogger().info(
+                "Admin " + player.getName() + " deleted order " + target.order().getOrderId()
+                    + " owned by " + ownerName
+                    + " with refund $" + formatCompactAmount(remainingFunds) + "."
+            );
+            sendAdminOrderDeletedWebhook(player, ownerName, target.order(), remainingFunds);
+            clearAdminTarget(viewState);
+            if (selfModeration) {
+                manager.messages().send(player, "orders.deleted-self", PluginMessages.placeholders("order", orderName));
+            } else {
+                manager.messages().send(player, "orders.deleted-other", PluginMessages.placeholders(
+                    "owner", ownerName,
+                    "order", orderName
+                ));
+            }
+
+            Player owner = Bukkit.getPlayer(target.ownerId());
+            if (!selfModeration && owner != null && owner.isOnline()) {
+                manager.messages().send(owner, "orders.owner-deleted", PluginMessages.placeholders(
+                    "order", orderName,
+                    "admin", player.getName()
+                ));
+                if (remainingFunds > 0D) {
+                    manager.messages().send(owner, "orders.refunded", PluginMessages.placeholders("amount", formatCompactAmount(remainingFunds)));
+                }
+            }
+            openOrdersMenu(player, null);
+        } finally {
+            releaseOrderOperation(orderId);
         }
-        openOrdersMenu(player, null);
     }
 
     boolean handleAdminCancelOrder(Player player, AdminOrderTarget target) {
-        if (target.order().isCancelled()) {
-            return true;
-        }
-
-        boolean selfModeration = target.ownerId().equals(player.getUniqueId());
-        double remainingFunds = getRemainingOrderFunds(target.order());
-        if (!refundRemainingOrderFunds(target.ownerId(), target.order())) {
-            sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
+        String orderId = target.order().getOrderId();
+        if (!tryAcquireOrderOperation(orderId)) {
             return false;
         }
 
-        target.order().setCancelled(true);
-        playerDataStore.saveUrgent(target.ownerId());
-
-        String ownerName = resolvePlayerName(target.ownerId());
-        String orderName = formatOrderDisplayName(target.order());
-        appendOrderHistory(
-            target.ownerId(),
-            "Order Cancelled by Admin",
-            player.getName() + " cancelled " + orderName + " (Refund $" + formatCompactAmount(remainingFunds) + ")"
-        );
-        manager.fileLogger().info(
-            "Admin " + player.getName() + " cancelled order " + target.order().getOrderId()
-                + " owned by " + ownerName
-                + " with refund $" + formatCompactAmount(remainingFunds) + "."
-        );
-        sendAdminOrderCancelledWebhook(player, ownerName, target.order(), remainingFunds);
-        sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
-        if (selfModeration) {
-            manager.messages().send(player, "orders.cancelled-self-admin", PluginMessages.placeholders("order", orderName));
-        } else {
-            manager.messages().send(player, "orders.cancelled-other-admin", PluginMessages.placeholders(
-                "owner", ownerName,
-                "order", orderName
-            ));
-        }
-
-        Player owner = Bukkit.getPlayer(target.ownerId());
-        if (!selfModeration && owner != null && owner.isOnline()) {
-            manager.messages().send(owner, "orders.owner-cancelled-admin", PluginMessages.placeholders(
-                "order", orderName,
-                "admin", player.getName()
-            ));
-            if (remainingFunds > 0D) {
-                manager.messages().send(owner, "orders.refunded", PluginMessages.placeholders("amount", formatCompactAmount(remainingFunds)));
+        try {
+            PlayerDataStore.PlayerData ownerData = playerDataStore.getOrCreate(target.ownerId());
+            PlayerDataStore.OrderEntry liveOrder = findOrderById(ownerData, orderId);
+            if (liveOrder == null) {
+                return false;
             }
+            target = new AdminOrderTarget(target.ownerId(), ownerData, liveOrder);
+            if (target.order().isCancelled()) {
+                return true;
+            }
+
+            boolean selfModeration = target.ownerId().equals(player.getUniqueId());
+            double remainingFunds = getRemainingOrderFunds(target.order());
+            if (!refundRemainingOrderFunds(target.ownerId(), target.order())) {
+                sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
+                return false;
+            }
+
+            target.order().setCancelled(true);
+            playerDataStore.saveUrgent(target.ownerId());
+
+            String ownerName = resolvePlayerName(target.ownerId());
+            String orderName = formatOrderDisplayName(target.order());
+            appendOrderHistory(
+                target.ownerId(),
+                "Order Cancelled by Admin",
+                player.getName() + " cancelled " + orderName + " (Refund $" + formatCompactAmount(remainingFunds) + ")"
+            );
+            manager.fileLogger().info(
+                "Admin " + player.getName() + " cancelled order " + target.order().getOrderId()
+                    + " owned by " + ownerName
+                    + " with refund $" + formatCompactAmount(remainingFunds) + "."
+            );
+            sendAdminOrderCancelledWebhook(player, ownerName, target.order(), remainingFunds);
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
+            if (selfModeration) {
+                manager.messages().send(player, "orders.cancelled-self-admin", PluginMessages.placeholders("order", orderName));
+            } else {
+                manager.messages().send(player, "orders.cancelled-other-admin", PluginMessages.placeholders(
+                    "owner", ownerName,
+                    "order", orderName
+                ));
+            }
+
+            Player owner = Bukkit.getPlayer(target.ownerId());
+            if (!selfModeration && owner != null && owner.isOnline()) {
+                manager.messages().send(owner, "orders.owner-cancelled-admin", PluginMessages.placeholders(
+                    "order", orderName,
+                    "admin", player.getName()
+                ));
+                if (remainingFunds > 0D) {
+                    manager.messages().send(owner, "orders.refunded", PluginMessages.placeholders("amount", formatCompactAmount(remainingFunds)));
+                }
+            }
+            return true;
+        } finally {
+            releaseOrderOperation(orderId);
         }
-        return true;
     }
 
     void sendOrderCreatedWebhook(Player player, PlayerDataStore.OrderEntry order, double totalCost) {
@@ -901,57 +995,75 @@ final class OrdersMenuDeliverySupport {
         PlayerDataStore.OrderEntry selectedOrder,
         List<Integer> claimSessionStacks
     ) {
-        int startIndex = (viewState.claimPage - 1) * CLAIM_PAGE_CAPACITY;
-        int endIndex = Math.min(claimSessionStacks.size(), startIndex + CLAIM_PAGE_CAPACITY);
-        if (startIndex < 0 || startIndex >= endIndex) {
+        String orderId = selectedOrder.getOrderId();
+        if (!tryAcquireOrderOperation(orderId)) {
             openClaimOrderMenu(player, false);
             return;
         }
 
-        List<Integer> pageStacks = new ArrayList<>(endIndex - startIndex);
-        for (int index = startIndex; index < endIndex; index++) {
-            pageStacks.add(Math.max(0, claimSessionStacks.get(index)));
-        }
-        if (pageStacks.isEmpty()) {
-            openClaimOrderMenu(player, false);
-            return;
-        }
-
-        List<ItemStack> stacksToDrop = new ArrayList<>();
-        int droppedAmount = 0;
-        for (int stackAmount : pageStacks) {
-            if (stackAmount <= 0) {
-                continue;
+        try {
+            playerData = playerDataStore.getOrCreate(player.getUniqueId());
+            selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
+            if (selectedOrder == null) {
+                openYourOrdersMenu(player);
+                return;
             }
-            droppedAmount += stackAmount;
-            stacksToDrop.add(createOrderStack(selectedOrder, stackAmount));
-        }
 
-        if (droppedAmount <= 0) {
-            openClaimOrderMenu(player, false);
-            return;
-        }
+            claimSessionStacks = initializeClaimSessionStacks(viewState, selectedOrder, false);
+            int startIndex = (viewState.claimPage - 1) * CLAIM_PAGE_CAPACITY;
+            int endIndex = Math.min(claimSessionStacks.size(), startIndex + CLAIM_PAGE_CAPACITY);
+            if (startIndex < 0 || startIndex >= endIndex) {
+                openClaimOrderMenu(player, false);
+                return;
+            }
 
-        for (int index = startIndex; index < endIndex; index++) {
-            claimSessionStacks.set(index, 0);
-        }
-        selectedOrder.setAmountClaimable(Math.max(0, selectedOrder.getAmountClaimable() - droppedAmount));
-        boolean removed = removeOrderIfCompleted(playerData, viewState);
-        if (removed) {
-            clearClaimSession(viewState);
-        }
-        playerDataStore.saveUrgent(player.getUniqueId());
-        appendOrderHistory(
-            player.getUniqueId(),
-            "Order Claimed",
-            "Claimed " + formatCompactAmount(droppedAmount) + "x " + formatOrderDisplayName(selectedOrder) + " (Drop Page)"
-        );
-        sendOrderClaimedWebhook(player, selectedOrder, droppedAmount, "Drop Page");
-        dropClaimStacksWithDelay(player, stacksToDrop);
-        if (!removed && viewState.manageOrderIndex >= 0) {
-            openClaimOrderMenu(player, false);
-        } else {
-            openYourOrdersMenu(player);
+            List<Integer> pageStacks = new ArrayList<>(endIndex - startIndex);
+            for (int index = startIndex; index < endIndex; index++) {
+                pageStacks.add(Math.max(0, claimSessionStacks.get(index)));
+            }
+            if (pageStacks.isEmpty()) {
+                openClaimOrderMenu(player, false);
+                return;
+            }
+
+            List<ItemStack> stacksToDrop = new ArrayList<>();
+            int droppedAmount = 0;
+            for (int stackAmount : pageStacks) {
+                if (stackAmount <= 0) {
+                    continue;
+                }
+                droppedAmount += stackAmount;
+                stacksToDrop.add(createOrderStack(selectedOrder, stackAmount));
+            }
+
+            if (droppedAmount <= 0) {
+                openClaimOrderMenu(player, false);
+                return;
+            }
+
+            for (int index = startIndex; index < endIndex; index++) {
+                claimSessionStacks.set(index, 0);
+            }
+            selectedOrder.setAmountClaimable(Math.max(0, selectedOrder.getAmountClaimable() - droppedAmount));
+            boolean removed = removeOrderIfCompleted(playerData, viewState);
+            if (removed) {
+                clearClaimSession(viewState);
+            }
+            playerDataStore.saveUrgent(player.getUniqueId());
+            appendOrderHistory(
+                player.getUniqueId(),
+                "Order Claimed",
+                "Claimed " + formatCompactAmount(droppedAmount) + "x " + formatOrderDisplayName(selectedOrder) + " (Drop Page)"
+            );
+            sendOrderClaimedWebhook(player, selectedOrder, droppedAmount, "Drop Page");
+            dropClaimStacksWithDelay(player, stacksToDrop);
+            if (!removed && viewState.manageOrderIndex >= 0) {
+                openClaimOrderMenu(player, false);
+            } else {
+                openYourOrdersMenu(player);
+            }
+        } finally {
+            releaseOrderOperation(orderId);
         }
     }
 
@@ -1041,20 +1153,50 @@ final class OrdersMenuDeliverySupport {
         viewState.claimSessionStacks = null;
     }
 
+    boolean finishClaimSession(UUID playerId, MenuViewState viewState) {
+        String orderId = viewState.claimSessionOrderId;
+        if (!tryAcquireOrderOperation(orderId)) {
+            viewState.manageOrderIndex = -1;
+            viewState.manageOrderId = null;
+            clearClaimSession(viewState);
+            return false;
+        }
+
+        try {
+            PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
+            if (resolveSelectedOrder(playerData, viewState, orderId) == null) {
+                return false;
+            }
+            boolean removed = removeOrderIfCompleted(playerData, viewState);
+            playerDataStore.save(playerId);
+            return removed;
+        } finally {
+            releaseOrderOperation(orderId);
+        }
+    }
+
     PlayerDataStore.OrderEntry getSelectedOrder(PlayerDataStore.PlayerData playerData, MenuViewState viewState) {
+        if (viewState.manageOrderId != null) {
+            return resolveSelectedOrder(playerData, viewState, viewState.manageOrderId);
+        }
+
         int selectedIndex = viewState.manageOrderIndex;
         if (selectedIndex < 0 || selectedIndex >= playerData.getOrders().size()) {
             viewState.manageOrderIndex = -1;
+            viewState.manageOrderId = null;
             clearClaimSession(viewState);
             return null;
         }
-        return playerData.getOrders().get(selectedIndex);
+        PlayerDataStore.OrderEntry selectedOrder = playerData.getOrders().get(selectedIndex);
+        viewState.manageOrderId = selectedOrder.getOrderId();
+        return selectedOrder;
     }
 
     boolean removeOrderIfCompleted(PlayerDataStore.PlayerData playerData, MenuViewState viewState) {
         int selectedIndex = viewState.manageOrderIndex;
         if (selectedIndex < 0 || selectedIndex >= playerData.getOrders().size()) {
             viewState.manageOrderIndex = -1;
+            viewState.manageOrderId = null;
             clearClaimSession(viewState);
             return false;
         }
@@ -1069,6 +1211,7 @@ final class OrdersMenuDeliverySupport {
 
         playerData.getOrders().remove(selectedIndex);
         viewState.manageOrderIndex = -1;
+        viewState.manageOrderId = null;
         viewState.claimPage = 1;
         clearClaimSession(viewState);
         return true;
@@ -1095,6 +1238,19 @@ final class OrdersMenuDeliverySupport {
             }
         }
         return null;
+    }
+
+    int findOrderIndexById(PlayerDataStore.PlayerData playerData, String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            return -1;
+        }
+        List<PlayerDataStore.OrderEntry> orders = playerData.getOrders();
+        for (int index = 0; index < orders.size(); index++) {
+            if (orderId.equals(orders.get(index).getOrderId())) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     ItemStack[] cloneContents(ItemStack[] source) {
