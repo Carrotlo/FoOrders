@@ -29,10 +29,6 @@
                     <createDependencyReducedPom>false</createDependencyReducedPom>
                     <relocations>
                         <relocation>
-                            <pattern>me.foesio.core</pattern>
-                            <shadedPattern>me.foesio.foOrders.libs.core</shadedPattern>
-                        </relocation>
-                        <relocation>
                             <pattern>com.google.gson</pattern>
                             <shadedPattern>me.foesio.foOrders.libs.gson</shadedPattern>
                         </relocation>
@@ -78,6 +74,7 @@
             <groupId>me.foesio</groupId>
             <artifactId>fo-plugin-core</artifactId>
             <version>0.1.0-SNAPSHOT</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.spigotmc</groupId>

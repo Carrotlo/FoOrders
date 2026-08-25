@@ -1,7 +1,6 @@
 package me.foesio.foOrders;
 
 import me.foesio.core.message.FoStyle;
-import me.foesio.core.text.FoText;
 import me.foesio.foOrders.util.TextFormat;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ClickEvent;
@@ -30,7 +29,7 @@ public final class PluginMessages {
 
     private final JavaPlugin plugin;
     private YamlConfiguration messages = new YamlConfiguration();
-    private volatile String themeColor = FoText.color(DEFAULT_THEME_COLOR);
+    private volatile String themeColor = TextFormat.colorize(DEFAULT_THEME_COLOR);
     private volatile int revision = 0;
 
     public PluginMessages(JavaPlugin plugin) {
@@ -308,7 +307,7 @@ public final class PluginMessages {
     }
 
     private String colorize(String message) {
-        return FoText.color(message);
+        return TextFormat.colorize(message);
     }
 
     private void warn(String message) {

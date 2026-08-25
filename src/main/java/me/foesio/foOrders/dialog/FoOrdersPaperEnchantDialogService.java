@@ -10,7 +10,7 @@ import io.papermc.paper.registry.data.dialog.type.DialogType;
 import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.dialog.NativeDialogSupport;
 import me.foesio.core.scheduler.FoScheduler;
-import me.foesio.core.text.FoText;
+import me.foesio.foOrders.util.TextFormat;
 import me.foesio.foOrders.FoOrders;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
@@ -194,7 +194,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
     }
 
     private Component component(String text) {
-        return DialogIcons.inlineTokens(LEGACY.deserialize(FoText.color(safe(text))));
+        return DialogIcons.inlineTokens(LEGACY.deserialize(TextFormat.colorize(safe(text))));
     }
 
     private Component tooltip(String rawTooltip, Map<String, String> placeholders) {

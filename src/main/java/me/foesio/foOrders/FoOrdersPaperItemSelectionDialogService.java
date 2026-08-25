@@ -11,7 +11,7 @@ import io.papermc.paper.registry.data.dialog.type.DialogType;
 import me.foesio.core.dialog.DialogButton;
 import me.foesio.core.dialog.DialogIcons;
 import me.foesio.core.dialog.NativeDialogSupport;
-import me.foesio.core.text.FoText;
+import me.foesio.foOrders.util.TextFormat;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -290,7 +290,7 @@ final class FoOrdersPaperItemSelectionDialogService implements FoOrdersItemSelec
     }
 
     private Component component(String text) {
-        return DialogIcons.inlineTokens(LEGACY.deserialize(FoText.color(text == null ? "" : text)));
+        return DialogIcons.inlineTokens(LEGACY.deserialize(TextFormat.colorize(text == null ? "" : text)));
     }
 
     private String normalizeFilter(String filter) {

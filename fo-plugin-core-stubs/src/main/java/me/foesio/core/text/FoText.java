@@ -1,19 +1,16 @@
-package me.foesio.foOrders.util;
+package me.foesio.core.text;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class TextFormat {
+public final class FoText {
     private static final char SECTION = '§';
     private static final Pattern HEX_PATTERN = Pattern.compile("#([0-9a-fA-F]{6})");
     private static final String COLOR_CHARS = "0123456789abcdefklmnorABCDEFKLMNOR";
 
-    private TextFormat() {
-    }
+    private FoText() {}
 
-    public static String colorize(String message) {
+    public static String color(String message) {
         if (message == null || message.isEmpty()) {
             return message == null ? "" : message;
         }
@@ -46,27 +43,5 @@ public final class TextFormat {
             }
         }
         return new String(chars);
-    }
-
-    public static String applyPlaceholders(String message, Map<String, String> placeholders) {
-        String formatted = message == null ? "" : message;
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            String value = entry.getValue() == null ? "" : entry.getValue();
-            formatted = formatted
-                .replace("{" + entry.getKey() + "}", value)
-                .replace("%" + entry.getKey() + "%", value);
-        }
-        return formatted;
-    }
-
-    public static Map<String, String> placeholders(Object... values) {
-        Map<String, String> placeholders = new LinkedHashMap<>();
-        if (values == null) {
-            return placeholders;
-        }
-        for (int index = 0; index + 1 < values.length; index += 2) {
-            placeholders.put(String.valueOf(values[index]), String.valueOf(values[index + 1]));
-        }
-        return placeholders;
     }
 }
