@@ -9,6 +9,10 @@ import me.foesio.core.logging.FoFileLogger;
 import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.core.sound.FoAdminSounds;
+import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.core.sound.FoGuiSounds;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foOrders.command.OrderAdminCommand;
 import me.foesio.foOrders.command.OrderCommand;
@@ -43,6 +47,10 @@ public final class FoOrders extends JavaPlugin {
     private FoOrdersDialogInputService dialogInputService;
     private FoFileLogger fileLogger;
     private FoCoreContext core;
+    private FoSoundService sounds;
+    private FoEditorSounds editorSounds;
+    private FoAdminSounds adminSounds;
+    private FoGuiSounds guiSounds;
     private UpdateNoticeService updateNotices;
 
     @Override
@@ -52,11 +60,15 @@ public final class FoOrders extends JavaPlugin {
         fileLogger = FoFileLogger.create(this);
         fileLogger.configureFromConfig("file-logging", true);
         fileLogger.info("FoOrders enable started.");
+        core = FoPluginCore.create(this);
+        sounds = core.createSounds();
+        editorSounds = FoEditorSounds.create(sounds);
+        adminSounds = FoAdminSounds.create(sounds);
+        guiSounds = FoGuiSounds.create(sounds);
         messages = new PluginMessages(this);
         messages.reload();
         guiConfigManager = new GuiConfigManager(this);
         guiConfigManager.reload();
-        core = FoPluginCore.create(this);
         FoScheduler schedulerAdapter = core.scheduler();
         getLogger().info("FoOrders scheduler mode: " + (schedulerAdapter.isFolia() ? "Folia-compatible bridge" : "Bukkit scheduler"));
         core.warnIfNativeDialogsUnavailable();
@@ -86,7 +98,9 @@ public final class FoOrders extends JavaPlugin {
             dialogService,
             core.inventoryCloseSuppressor(),
             core.inventoryDeposits(),
-            fileLogger
+            fileLogger,
+            sounds,
+            editorSounds
         );
         OrderCommand orderCommand = new OrderCommand(ordersMenuManager);
         ordersMenuManager.reloadFromConfig();
@@ -120,7 +134,7 @@ public final class FoOrders extends JavaPlugin {
             public void sendClickable(CommandSender sender, String template, String url, Map<String, String> placeholders) {
                 messages.sendClickableTemplate(sender, template, url, fixedPluginPlaceholders(placeholders));
             }
-        }, MODRINTH_PROJECT_ID).start();
+        }, MODRINTH_PROJECT_ID, adminSounds).start();
     }
 
     private Map<String, String> fixedPluginPlaceholders(Map<String, String> placeholders) {
@@ -231,6 +245,14 @@ public final class FoOrders extends JavaPlugin {
         }
     }
 
+    public FoGuiSounds getGuiSounds() {
+        return guiSounds;
+    }
+
+    public FoAdminSounds getAdminSounds() {
+        return adminSounds;
+    }
+
     public void reloadDialogFiles() {
         if (dialogInputService != null) {
             dialogInputService.reloadDialogs();
@@ -251,6 +273,7 @@ public final class FoOrders extends JavaPlugin {
             .addConfig(this)
             .add("config-defaults", this::ensureConfigDefaults)
             .add("file-logging", this::reloadFileLogging)
+            .add("sounds", sounds::reload)
             .add("messages", this::reloadMessages)
             .add("dialogs", this::reloadDialogFiles)
             .add("guis", this::reloadGuiFiles)

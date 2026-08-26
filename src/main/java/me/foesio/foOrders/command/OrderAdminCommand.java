@@ -64,9 +64,15 @@ public final class OrderAdminCommand implements CommandExecutor, TabCompleter {
             FoReloadResult result = plugin.reloadPlugin();
             if (!result.successful()) {
                 if ("economy".equals(result.failedStep())) {
+                    if (sender instanceof Player player) {
+                        plugin.getAdminSounds().reloadError(player);
+                    }
                     ordersMenuManager.messages().send(sender, "admin.economy-missing");
                     plugin.fileLogger().error("Reload completed but Vault economy provider is missing.", result.error());
                     return true;
+                }
+                if (sender instanceof Player player) {
+                    plugin.getAdminSounds().reloadError(player);
                 }
                 plugin.fileLogger().error("Reload failed at " + result.failedStep() + ": " + result.errorMessage(), result.error());
                 ordersMenuManager.messages().send(sender, "admin.reload-failed", PluginMessages.placeholders(
@@ -76,6 +82,9 @@ public final class OrderAdminCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             ordersMenuManager.messages().send(sender, "admin.reload-success");
+            if (sender instanceof Player player) {
+                plugin.getAdminSounds().reload(player);
+            }
             plugin.fileLogger().info("Admin " + sender.getName() + " completed reload.");
             return true;
         }

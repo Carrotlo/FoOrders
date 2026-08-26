@@ -7,6 +7,8 @@ import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.logging.FoFileLogger;
 import me.foesio.core.scheduler.FoScheduler;
+import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.core.sound.FoSoundService;
 import me.foesio.foOrders.integration.DiscordWebhookNotifier;
 import me.foesio.foOrders.config.GuiConfigManager;
 import me.foesio.foOrders.dialog.FoOrdersDialogInputService;
@@ -91,6 +93,30 @@ public final class OrdersMenuManager implements Listener {
     static final long DEFAULT_ORDER_MENU_REFRESH_COOLDOWN_MILLIS = 50L;
     static final long MAIN_OPTION_REFRESH_DEBOUNCE_TICKS = 4L;
     static final long ITEM_SELECT_OPTION_REFRESH_DEBOUNCE_TICKS = 4L;
+    static final String GUI_CLICK_SOUND = "gui.click";
+    static final String GUI_SORT_SOUND = "gui.sort";
+    static final String GUI_FILTER_SOUND = "gui.filter";
+    static final String GUI_REFRESH_SOUND = "gui.refresh";
+    static final String GUI_SEARCH_SOUND = "gui.search";
+    static final String GUI_CLEAR_SEARCH_SOUND = "gui.clear-search";
+    static final String GUI_PAGE_NEXT_SOUND = "gui.page-next";
+    static final String GUI_PAGE_PREVIOUS_SOUND = "gui.page-previous";
+    static final String GUI_SELECT_SOUND = "gui.select";
+    static final String GUI_CYCLE_SOUND = "gui.cycle";
+    static final String GUI_CONFIRM_SOUND = "gui.confirm";
+    static final String GUI_CANCEL_SOUND = "gui.cancel";
+    static final String GUI_BACK_SOUND = "gui.back";
+    static final String GUI_ERROR_SOUND = "gui.error";
+    static final String ORDER_CREATED_SOUND = "orders.created";
+    static final String ORDER_CANCELLED_SOUND = "orders.cancelled";
+    static final String ORDER_ADMIN_CANCELLED_SOUND = "orders.admin-cancelled";
+    static final String ORDER_ADMIN_DELETED_SOUND = "orders.admin-deleted";
+    static final String ORDER_DELIVERY_OPEN_SOUND = "orders.delivery-open";
+    static final String ORDER_DELIVERY_CONFIRM_SOUND = "orders.delivery-confirm";
+    static final String ORDER_DELIVERED_SOUND = "orders.delivered";
+    static final String ORDER_FILLED_SOUND = "orders.filled";
+    static final String ORDER_CLAIMED_SOUND = "orders.claimed";
+    static final String ORDER_CLAIMED_DROP_SOUND = "orders.claimed-drop";
     static final double MIN_ORDER_TAX_PERCENTAGE = 0D;
     static final double MAX_ORDER_TAX_PERCENTAGE = 100D;
     static final int ITEM_SELECT_PAGE_SIZE = 45;
@@ -198,7 +224,10 @@ public final class OrdersMenuManager implements Listener {
     final InventoryCloseSuppressor inventoryCloseSuppressor;
     final InventoryDepositService inventoryDepositService;
     final FoFileLogger fileLogger;
+    final FoSoundService sounds;
+    final FoEditorSounds editorSounds;
     final DialogService dialogService;
+    final BedrockPlayerDetector bedrockPlayerDetector;
     OrdersMenuViewSupport viewSupport;
     OrdersMenuInteractionSupport interactionSupport;
     volatile FoOrdersDialogInputService dialogInputService;
@@ -241,7 +270,9 @@ public final class OrdersMenuManager implements Listener {
         DialogService dialogService,
         InventoryCloseSuppressor inventoryCloseSuppressor,
         InventoryDepositService inventoryDepositService,
-        FoFileLogger fileLogger
+        FoFileLogger fileLogger,
+        FoSoundService sounds,
+        FoEditorSounds editorSounds
     ) {
         this.plugin = plugin;
         this.scheduler = scheduler;
@@ -255,7 +286,10 @@ public final class OrdersMenuManager implements Listener {
         this.inventoryCloseSuppressor = inventoryCloseSuppressor;
         this.inventoryDepositService = inventoryDepositService;
         this.fileLogger = fileLogger;
+        this.sounds = sounds;
+        this.editorSounds = editorSounds;
         this.discordWebhookNotifier = new DiscordWebhookNotifier(plugin);
+        this.bedrockPlayerDetector = new BedrockPlayerDetector(plugin);
         this.itemSupport = new OrdersMenuItemSupport(this);
         this.viewSupport = new OrdersMenuViewSupport(this);
         this.interactionSupport = new OrdersMenuInteractionSupport(this);
@@ -271,6 +305,10 @@ public final class OrdersMenuManager implements Listener {
 
     DialogService dialogService() {
         return dialogService;
+    }
+
+    boolean isBedrockPlayer(Player player) {
+        return bedrockPlayerDetector.isBedrockPlayer(player);
     }
 
     FoOrdersItemSelectionDialogService itemSelectionDialogService() {
@@ -329,6 +367,18 @@ public final class OrdersMenuManager implements Listener {
 
     FoFileLogger fileLogger() {
         return fileLogger;
+    }
+
+    FoEditorSounds editorSounds() {
+        return editorSounds;
+    }
+
+    void playSound(Player player, String path) {
+        sounds.play(player, path);
+    }
+
+    void playSoundWithPitchVariation(Player player, String path, float maxVariation) {
+        sounds.playWithPitchVariation(player, path, maxVariation);
     }
 
     public void setEconomy(Economy economy) {

@@ -68,6 +68,10 @@ final class OrdersMenuDeliverySupport {
         manager.viewSupport.openOrdersMenu(player, searchText);
     }
 
+    private void openOrdersMenu(Player player, String searchText, String transitionSound) {
+        manager.viewSupport.openOrdersMenu(player, searchText, transitionSound);
+    }
+
     private boolean tryAcquireOrderOperation(String orderId) {
         return orderId != null && !orderId.isBlank() && activeOrderOperationLocks.add(orderId);
     }
@@ -166,6 +170,7 @@ final class OrdersMenuDeliverySupport {
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.OrderEntry selectedOrder = getSelectedOrder(playerData, viewState);
         if (selectedOrder == null) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             openYourOrdersMenu(player);
             return;
         }
@@ -178,6 +183,7 @@ final class OrdersMenuDeliverySupport {
 
         if (rawSlot == backSlot && viewState.claimPage > 1) {
             viewState.claimPage--;
+            manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openClaimOrderMenu(player, false);
             return;
         }
@@ -186,6 +192,7 @@ final class OrdersMenuDeliverySupport {
             int pageCount = calculateClaimSessionPageCount(claimSessionStacks);
             if (viewState.claimPage < pageCount) {
                 viewState.claimPage++;
+                manager.playSound(player, GUI_PAGE_NEXT_SOUND);
                 openClaimOrderMenu(player, false);
             }
             return;
@@ -230,6 +237,7 @@ final class OrdersMenuDeliverySupport {
 
             int transferred = transferClaimedItemsToPlayer(player, selectedOrder, requestedAmount);
             if (transferred <= 0) {
+                manager.playSound(player, GUI_ERROR_SOUND);
                 return;
             }
 
@@ -251,6 +259,7 @@ final class OrdersMenuDeliverySupport {
                     + " from order " + selectedOrder.getOrderId() + "."
             );
             sendOrderClaimedWebhook(player, selectedOrder, transferred, "Inventory");
+            manager.playSoundWithPitchVariation(player, ORDER_CLAIMED_SOUND, 0.06f);
 
             if (!removed && viewState.manageOrderIndex >= 0) {
                 openClaimOrderMenu(player, false);
@@ -266,6 +275,7 @@ final class OrdersMenuDeliverySupport {
         UUID playerId = player.getUniqueId();
         PendingDeliveryState pending = pendingDeliveries.get(playerId);
         if (pending == null) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             openOrdersMenu(player, null);
             return;
         }
@@ -279,7 +289,7 @@ final class OrdersMenuDeliverySupport {
             if (removed != null) {
                 returnPendingItems(player, removed.submittedItems());
             }
-            openOrdersMenu(player, null);
+            openOrdersMenu(player, null, GUI_BACK_SOUND);
             return;
         }
 
@@ -327,6 +337,7 @@ final class OrdersMenuDeliverySupport {
         ItemStack[] submittedItems = cloneContents(activePending.submittedItems());
 
         if (liveOrder == null || liveOrder.isCancelled() || submittedItems.length == 0) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             returnPendingItems(player, submittedItems);
             openOrdersMenu(player, null);
             return;
@@ -339,10 +350,14 @@ final class OrdersMenuDeliverySupport {
 
         int remainingNeeded = Math.max(0, liveOrder.getAmountOrdered() - liveOrder.getAmountDelivered());
         int acceptedAmount = Math.min(submittedWantedAmount, remainingNeeded);
+        if (acceptedAmount <= 0) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+        }
 
         double payout = acceptedAmount * liveOrder.getPricePerItem();
         if (payout > 0D) {
             if (!hasEconomyProvider()) {
+                manager.playSound(player, GUI_ERROR_SOUND);
                 returnPendingItems(player, submittedItems);
                 sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
                 openOrdersMenu(player, null);
@@ -351,6 +366,7 @@ final class OrdersMenuDeliverySupport {
 
             EconomyResponse payoutResponse = depositEconomy(player, payout);
             if (payoutResponse == null || !payoutResponse.transactionSuccess()) {
+                manager.playSound(player, GUI_ERROR_SOUND);
                 returnPendingItems(player, submittedItems);
                 sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
                 openOrdersMenu(player, null);
@@ -421,15 +437,18 @@ final class OrdersMenuDeliverySupport {
                     + " and earned $" + formatCompactAmount(payout) + "."
             );
             sendOrderDeliveredWebhook(player, ownerName, liveOrder, acceptedAmount, payout);
+            manager.playSound(player, ORDER_DELIVERED_SOUND);
             manager.messages().send(player, "orders.delivered", PluginMessages.placeholders("payout", formatCompactAmount(payout)));
             Player orderOwner = Bukkit.getPlayer(activePending.ownerId());
             if (orderOwner != null && orderOwner.isOnline()) {
+                manager.playSound(orderOwner, ORDER_DELIVERED_SOUND);
                 manager.messages().send(orderOwner, "orders.owner-delivered", PluginMessages.placeholders(
                     "player", player.getName(),
                     "amount", formatCompactAmount(acceptedAmount),
                     "item", itemName
                 ));
                 if (liveOrder.getAmountDelivered() >= liveOrder.getAmountOrdered()) {
+                    manager.playSound(orderOwner, ORDER_FILLED_SOUND);
                     manager.messages().send(orderOwner, "orders.owner-filled", PluginMessages.placeholders("item", itemName));
                 }
             }
@@ -585,6 +604,7 @@ final class OrdersMenuDeliverySupport {
             boolean removed = removeOrderIfCompleted(playerData, viewState);
             playerDataStore.saveUrgent(player.getUniqueId());
             sendOrderCancelledWebhook(player, selectedOrder, refundedAmount);
+            manager.playSound(player, ORDER_CANCELLED_SOUND);
             if (removed) {
                 openYourOrdersMenu(player);
                 return;
@@ -639,6 +659,7 @@ final class OrdersMenuDeliverySupport {
                     + " with refund $" + formatCompactAmount(remainingFunds) + "."
             );
             sendAdminOrderDeletedWebhook(player, ownerName, target.order(), remainingFunds);
+            manager.playSound(player, ORDER_ADMIN_DELETED_SOUND);
             clearAdminTarget(viewState);
             if (selfModeration) {
                 manager.messages().send(player, "orders.deleted-self", PluginMessages.placeholders("order", orderName));
@@ -705,6 +726,7 @@ final class OrdersMenuDeliverySupport {
                     + " with refund $" + formatCompactAmount(remainingFunds) + "."
             );
             sendAdminOrderCancelledWebhook(player, ownerName, target.order(), remainingFunds);
+            manager.playSound(player, ORDER_ADMIN_CANCELLED_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
             if (selfModeration) {
                 manager.messages().send(player, "orders.cancelled-self-admin", PluginMessages.placeholders("order", orderName));
@@ -1056,6 +1078,7 @@ final class OrdersMenuDeliverySupport {
                 "Claimed " + formatCompactAmount(droppedAmount) + "x " + formatOrderDisplayName(selectedOrder) + " (Drop Page)"
             );
             sendOrderClaimedWebhook(player, selectedOrder, droppedAmount, "Drop Page");
+            manager.playSound(player, ORDER_CLAIMED_DROP_SOUND);
             dropClaimStacksWithDelay(player, stacksToDrop);
             if (!removed && viewState.manageOrderIndex >= 0) {
                 openClaimOrderMenu(player, false);

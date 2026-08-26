@@ -1,6 +1,7 @@
 package me.foesio.foOrders;
 
 import me.foesio.foOrders.config.GuiConfigManager;
+import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.gui.EntryBrowserMenus;
 import me.foesio.core.gui.EntryBrowserRequest;
 import me.foesio.core.scheduler.FoScheduler;
@@ -16,6 +17,7 @@ import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -127,7 +129,52 @@ final class OrdersMenuViewSupport {
     }
 
     private void openMenu(Player player, Inventory menu) {
+        openMenu(player, menu, null);
+    }
+
+    private void openMenu(Player player, Inventory menu, String transitionSound) {
+        if (hasScreenChanged(player, menu)) {
+            if (transitionSound != null && !transitionSound.isBlank()) {
+                manager.playSound(player, transitionSound);
+            } else if (isEditorScreen(menu)) {
+                manager.editorSounds().open(player);
+            } else {
+                manager.plugin.getGuiSounds().open(player);
+            }
+        }
         manager.itemSupport.openMenu(player, menu);
+    }
+
+    private boolean hasScreenChanged(Player player, Inventory menu) {
+        Inventory current = player == null ? null : player.getOpenInventory().getTopInventory();
+        if (current == null || menu == null) {
+            return true;
+        }
+
+        InventoryHolder currentHolder = current.getHolder();
+        InventoryHolder nextHolder = menu.getHolder();
+        if (currentHolder instanceof OrdersMenuHolder currentOrders
+            && nextHolder instanceof OrdersMenuHolder nextOrders) {
+            return currentOrders.getMenuType() != nextOrders.getMenuType();
+        }
+        if (currentHolder instanceof EntryBrowserHolder currentBrowser
+            && nextHolder instanceof EntryBrowserHolder nextBrowser) {
+            return !(currentBrowser.request().context() instanceof AdminCustomItemBrowserContext)
+                || !(nextBrowser.request().context() instanceof AdminCustomItemBrowserContext);
+        }
+        return true;
+    }
+
+    private boolean isEditorScreen(Inventory menu) {
+        if (menu == null) {
+            return false;
+        }
+        InventoryHolder holder = menu.getHolder();
+        if (holder instanceof OrdersMenuHolder ordersHolder) {
+            return ordersHolder.getMenuType() == MenuType.ADMIN_ITEM_EDIT;
+        }
+        return holder instanceof EntryBrowserHolder browserHolder
+            && browserHolder.request().context() instanceof AdminCustomItemBrowserContext;
     }
 
     private ItemStack createSimpleItem(Material material, String displayName, List<String> loreLines) {
@@ -312,6 +359,10 @@ final class OrdersMenuViewSupport {
     }
 
     void openOrdersMenu(Player player, String searchText) {
+        openOrdersMenu(player, searchText, null);
+    }
+
+    void openOrdersMenu(Player player, String searchText, String transitionSound) {
         UUID playerId = player.getUniqueId();
         manager.pendingMainMenuRefreshIds.remove(playerId);
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
@@ -337,7 +388,7 @@ final class OrdersMenuViewSupport {
         Inventory menu = createMenu(MenuType.MAIN, 54, mainMenuTitle(viewState));
         populateMainMenuContents(player, menu, viewState, playerData, orderSlots, visibleOrders, pageCount);
 
-        openMenu(player, menu);
+        openMenu(player, menu, transitionSound);
     }
 
     private void prepareMainMenuState(MenuViewState viewState) {
@@ -410,6 +461,10 @@ final class OrdersMenuViewSupport {
     }
 
     void openYourOrdersMenu(Player player) {
+        openYourOrdersMenu(player, null);
+    }
+
+    void openYourOrdersMenu(Player player, String transitionSound) {
         UUID playerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         clearAdminTarget(viewState);
@@ -435,7 +490,7 @@ final class OrdersMenuViewSupport {
 
         menu.setItem(newOrderSlot, createGuiItem("your-orders.new-order", Material.MAP, ACCENT + "New Order", List.of(WHITE + "Click to create new order")));
 
-        openMenu(player, menu);
+        openMenu(player, menu, transitionSound);
     }
 
     List<Integer> yourOrderSlots(int newOrderSlot) {
@@ -449,6 +504,10 @@ final class OrdersMenuViewSupport {
     }
 
     void openNewOrderMenu(Player player) {
+        openNewOrderMenu(player, null);
+    }
+
+    void openNewOrderMenu(Player player, String transitionSound) {
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
         viewState.newOrderConfirmLocked = false;
         NewOrderDraft draft = viewState.getOrCreateDraft();
@@ -529,7 +588,7 @@ final class OrdersMenuViewSupport {
             "total", formatCompactAmount(total)
         ), hiddenTaxLore));
 
-        openMenu(player, menu);
+        openMenu(player, menu, transitionSound);
     }
 
     void openItemSelectMenu(Player player, boolean resetPage) {
@@ -675,7 +734,7 @@ final class OrdersMenuViewSupport {
         List<Enchantment> enchantments
     ) {
         FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
-        if (dialogInputService == null || !dialogInputService.nativeEnabled()) {
+        if (manager.isBedrockPlayer(player) || dialogInputService == null || !dialogInputService.nativeEnabled()) {
             return false;
         }
 
@@ -965,6 +1024,10 @@ final class OrdersMenuViewSupport {
     }
 
     void openAdminItemEditorMenu(Player player, boolean resetPage) {
+        openAdminItemEditorMenu(player, resetPage, null);
+    }
+
+    void openAdminItemEditorMenu(Player player, boolean resetPage, String transitionSound) {
         if (!canModerateOrders(player)) {
             openOrdersMenu(player, null);
             return;
@@ -1004,7 +1067,7 @@ final class OrdersMenuViewSupport {
 
         int maxPage = EntryBrowserMenus.maxPage(request);
         viewState.adminEditorPage = Math.max(0, Math.min(viewState.adminEditorPage, maxPage));
-        openMenu(player, EntryBrowserMenus.createInventory(request.withPage(viewState.adminEditorPage)));
+        openMenu(player, EntryBrowserMenus.createInventory(request.withPage(viewState.adminEditorPage)), transitionSound);
     }
 
     private List<CustomItemStore.CustomItemDefinition> getFilteredAdminCustomItems(String rawFilter) {
@@ -1180,7 +1243,7 @@ final class OrdersMenuViewSupport {
         PendingDeliveryState pending = new PendingDeliveryState(selectedOrder.ownerId(), liveOrder.getOrderId(), null);
         pendingDeliveries.put(delivererId, pending);
         Inventory menu = createMenu(MenuType.DELIVER, 36, guiTitle("deliver", TITLE_DELIVER));
-        openMenu(player, menu);
+        openMenu(player, menu, ORDER_DELIVERY_OPEN_SOUND);
     }
 
     void openDeliveryConfirmMenu(Player player) {
@@ -1190,7 +1253,7 @@ final class OrdersMenuViewSupport {
         Inventory menu = createMenu(MenuType.DELIVERY_CONFIRM, inventorySize, guiTitle("delivery-confirm", TITLE_DELIVERY_CONFIRM));
         menu.setItem(cancelSlot, createGuiItem("delivery-confirm.cancel", Material.RED_STAINED_GLASS_PANE, CANCEL_RED + "ᴄᴀɴᴄᴇʟ", List.of(WHITE + "Click to return")));
         menu.setItem(confirmSlot, createGuiItem("delivery-confirm.confirm", Material.LIME_STAINED_GLASS_PANE, CONFIRM_GREEN + "ᴄᴏɴꜰɪʀᴍ", List.of(WHITE + "Click to confirm order")));
-        openMenu(player, menu);
+        openMenu(player, menu, ORDER_DELIVERY_CONFIRM_SOUND);
     }
 
     void openHistoryMenu(Player viewer, UUID targetPlayerId, HistoryDataStore.HistoryType historyType, boolean fromAdminCommand) {
@@ -1473,15 +1536,16 @@ final class OrdersMenuViewSupport {
                 continue;
             }
 
+            UUID ownerId = record.getPlayerId();
+            String ownerName = ownerNameCache.computeIfAbsent(ownerId, this::resolvePlayerName);
             if (!searchLower.isBlank()) {
-                String searchable = buildOrderSearchText(order);
-                if (!searchable.contains(searchLower)) {
+                String itemSearchable = buildOrderSearchText(order);
+                String ownerSearchable = ownerName.toLowerCase(Locale.ROOT);
+                if (!itemSearchable.contains(searchLower) && !ownerSearchable.contains(searchLower)) {
                     continue;
                 }
             }
 
-            UUID ownerId = record.getPlayerId();
-            String ownerName = ownerNameCache.computeIfAbsent(ownerId, this::resolvePlayerName);
             visibleOrders.add(new MainOrderView(ownerId, ownerName, order));
         }
 

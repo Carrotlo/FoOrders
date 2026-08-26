@@ -4,6 +4,7 @@ import me.foesio.core.editor.CursorItemEditor;
 import me.foesio.core.gui.EntryBrowserClick;
 import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.gui.EntryBrowserMenus;
+import me.foesio.core.sound.FoEditorSounds;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
@@ -77,8 +78,16 @@ final class OrdersMenuActionSupport {
         manager.viewSupport.openYourOrdersMenu(player);
     }
 
+    private void openYourOrdersMenu(Player player, String transitionSound) {
+        manager.viewSupport.openYourOrdersMenu(player, transitionSound);
+    }
+
     private void openNewOrderMenu(Player player) {
         manager.viewSupport.openNewOrderMenu(player);
+    }
+
+    private void openNewOrderMenu(Player player, String transitionSound) {
+        manager.viewSupport.openNewOrderMenu(player, transitionSound);
     }
 
     private void openItemSelectMenu(Player player, boolean resetPage) {
@@ -86,7 +95,8 @@ final class OrdersMenuActionSupport {
     }
 
     private void openItemSelection(Player player) {
-        if (!manager.plugin.getConfig().getBoolean("native-dialogs.enabled", true)
+        if (manager.isBedrockPlayer(player)
+            || !manager.plugin.getConfig().getBoolean("native-dialogs.enabled", true)
             || !manager.itemSelectionDialogsEnabled
             || manager.dialogService() == null) {
             openItemSelectMenu(player, true);
@@ -129,6 +139,10 @@ final class OrdersMenuActionSupport {
         manager.viewSupport.openOrdersMenu(player, searchText);
     }
 
+    private void openOrdersMenu(Player player, String searchText, String transitionSound) {
+        manager.viewSupport.openOrdersMenu(player, searchText, transitionSound);
+    }
+
     private void openHistoryMenu(Player player, UUID targetPlayerId, HistoryDataStore.HistoryType historyType, boolean fromAdminCommand) {
         manager.viewSupport.openHistoryMenu(player, targetPlayerId, historyType, fromAdminCommand);
     }
@@ -139,6 +153,10 @@ final class OrdersMenuActionSupport {
 
     private void openAdminItemEditorMenu(Player player, boolean resetPage) {
         manager.viewSupport.openAdminItemEditorMenu(player, resetPage);
+    }
+
+    private void openAdminItemEditorMenu(Player player, boolean resetPage, String transitionSound) {
+        manager.viewSupport.openAdminItemEditorMenu(player, resetPage, transitionSound);
     }
 
     private void openAdminItemEditMenu(Player player) {
@@ -342,6 +360,7 @@ final class OrdersMenuActionSupport {
         if (rawSlot == sortSlot) {
             playerData.setSortIndex((playerData.getSortIndex() + 1) % SORT_OPTIONS.size());
             playerDataStore.save(playerId);
+            manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND, 0.04f);
             viewState.page = 1;
             refreshMainMenuDebounced(player);
             return;
@@ -350,6 +369,7 @@ final class OrdersMenuActionSupport {
         if (rawSlot == filterSlot) {
             playerData.setFilterIndex((playerData.getFilterIndex() + 1) % FILTER_OPTIONS.size());
             playerDataStore.save(playerId);
+            manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND, 0.04f);
             viewState.page = 1;
             refreshMainMenuDebounced(player);
             return;
@@ -357,18 +377,21 @@ final class OrdersMenuActionSupport {
 
         if (rawSlot == refreshSlot) {
             if (manager.tryMarkOrderMenuRefresh(player)) {
+                manager.playSound(player, GUI_REFRESH_SOUND);
                 refreshMainMenu(player);
             }
             return;
         }
 
         if (rawSlot == searchSlot) {
+            manager.playSound(player, GUI_SEARCH_SOUND);
             openSignInput(player, SignInputType.MAIN_SEARCH);
             return;
         }
 
         if (rawSlot == mainBackSlot && viewState.page > 1) {
             viewState.page--;
+            manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             refreshMainMenu(player);
             return;
         }
@@ -377,6 +400,7 @@ final class OrdersMenuActionSupport {
             int pageCount = calculatePageCount(getCachedVisibleMainOrders(viewState, playerData).size(), orderSlots.size());
             if (viewState.page < pageCount) {
                 viewState.page++;
+                manager.playSound(player, GUI_PAGE_NEXT_SOUND);
                 refreshMainMenu(player);
             }
             return;
@@ -389,6 +413,7 @@ final class OrdersMenuActionSupport {
 
         if (rawSlot == historySlot) {
             if (!canOpenOwnHistory(player)) {
+                manager.playSound(player, GUI_ERROR_SOUND);
                 manager.messages().send(player, "history.disabled");
                 return;
             }
@@ -437,6 +462,7 @@ final class OrdersMenuActionSupport {
 
         if (rawSlot == newOrderSlot) {
             if (playerData.getOrders().size() >= playerMaxOrders) {
+                manager.playSound(player, GUI_ERROR_SOUND);
                 manager.messages().send(player, "orders.max-orders", PluginMessages.placeholders("amount", formatCompactAmount(playerMaxOrders)));
                 return;
             }
@@ -475,7 +501,7 @@ final class OrdersMenuActionSupport {
         int confirmSlot = guiItemSlot("new-order.confirm", CONFIRM_SLOT, inventorySize);
 
         if (rawSlot == cancelSlot) {
-            openYourOrdersMenu(player);
+            openYourOrdersMenu(player, GUI_BACK_SOUND);
             return;
         }
 
@@ -485,16 +511,19 @@ final class OrdersMenuActionSupport {
         }
 
         if (rawSlot == amountSlot) {
+            manager.playSound(player, GUI_CLICK_SOUND);
             openSignInput(player, SignInputType.AMOUNT);
             return;
         }
 
         if (rawSlot == priceSlot) {
+            manager.playSound(player, GUI_CLICK_SOUND);
             openSignInput(player, SignInputType.PRICE);
             return;
         }
 
         if (rawSlot == enchantSlot) {
+            manager.playSound(player, GUI_CLICK_SOUND);
             openEnchantSelectMenu(player, false);
             return;
         }
@@ -510,6 +539,7 @@ final class OrdersMenuActionSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.OrderEntry selectedOrder = getSelectedOrder(playerData, viewState);
         if (selectedOrder == null) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             openYourOrdersMenu(player);
             return;
         }
@@ -529,12 +559,14 @@ final class OrdersMenuActionSupport {
         }
 
         if (rawSlot == MANAGE_ADMIN_ACTIONS_SLOT && canModerateOrders(player)) {
+            manager.playSound(player, GUI_CLICK_SOUND);
             openAdminOrderActionsMenu(player, playerId, selectedOrder.getOrderId());
         }
     }
 
     void handleAdminOrderActionClick(Player player, int rawSlot) {
         if (!canModerateOrders(player)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             openOrdersMenu(player, null);
             return;
         }
@@ -543,6 +575,7 @@ final class OrdersMenuActionSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(adminId, ignored -> new MenuViewState());
         AdminOrderTarget target = resolveAdminOrderTarget(viewState);
         if (target == null) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             clearAdminTarget(viewState);
             openOrdersMenu(player, null);
             return;
@@ -573,43 +606,55 @@ final class OrdersMenuActionSupport {
             case ENTRY -> {
                 CustomItemStore.CustomItemDefinition selected = customItemStore.get(click.entryId());
                 if (selected == null) {
+                    manager.editorSounds().error(player);
                     openAdminItemEditorMenu(player, false);
                     return;
                 }
-            if (clickType == ClickType.SHIFT_RIGHT) {
-                if (isCustomItemInUse(selected.id())) {
-                    manager.messages().send(player, "custom-items.in-use");
+                if (clickType == ClickType.SHIFT_RIGHT) {
+                    if (isCustomItemInUse(selected.id())) {
+                        manager.editorSounds().error(player);
+                        manager.messages().send(player, "custom-items.in-use");
+                        openAdminItemEditorMenu(player, false);
+                        return;
+                    }
+                    if (customItemStore.remove(selected.id())) {
+                        manager.editorSounds().delete(player);
+                        manager.invalidateItemSelectCaches();
+                        manager.messages().send(player, "custom-items.removed", PluginMessages.placeholders("id", selected.id()));
+                        manager.fileLogger().info("Admin " + player.getName() + " removed custom item " + selected.id() + ".");
+                    } else {
+                        manager.editorSounds().error(player);
+                    }
                     openAdminItemEditorMenu(player, false);
                     return;
                 }
-                if (customItemStore.remove(selected.id())) {
-                    manager.invalidateItemSelectCaches();
-                    manager.messages().send(player, "custom-items.removed", PluginMessages.placeholders("id", selected.id()));
-                    manager.fileLogger().info("Admin " + player.getName() + " removed custom item " + selected.id() + ".");
-                }
-                openAdminItemEditorMenu(player, false);
-                return;
-            }
 
-            viewState.adminItemDraft = AdminItemDraft.fromDefinition(selected);
-            openAdminItemEditMenu(player);
+                viewState.adminItemDraft = AdminItemDraft.fromDefinition(selected);
+                openAdminItemEditMenu(player);
             }
             case ADD -> {
                 viewState.adminItemDraft = AdminItemDraft.newDraft(generateUniqueCustomItemId("custom_item"));
+                manager.editorSounds().add(player);
                 openAdminItemEditMenu(player);
             }
-            case SEARCH -> interaction.inputSupport.openAdminItemSearch(player);
+            case SEARCH -> {
+                manager.editorSounds().search(player);
+                interaction.inputSupport.openAdminItemSearch(player);
+            }
             case CLEAR_SEARCH -> {
                 viewState.adminEditorSearch = "";
                 viewState.adminEditorPage = 0;
+                manager.editorSounds().clearSearch(player);
                 openAdminItemEditorMenu(player, false);
             }
             case PREVIOUS_PAGE -> {
                 viewState.adminEditorPage = Math.max(0, holder.request().page() - 1);
+                manager.editorSounds().previousPage(player);
                 openAdminItemEditorMenu(player, false);
             }
             case NEXT_PAGE -> {
                 viewState.adminEditorPage = Math.min(holder.maxPage(), holder.request().page() + 1);
+                manager.editorSounds().nextPage(player);
                 openAdminItemEditorMenu(player, false);
             }
             case BACK, NONE -> {
@@ -628,12 +673,14 @@ final class OrdersMenuActionSupport {
         AdminItemDraft draft = viewState.getOrCreateAdminItemDraft();
 
         if (rawSlot == ADMIN_EDIT_CANCEL_SLOT) {
-            openAdminItemEditorMenu(player, false);
+            openAdminItemEditorMenu(player, false, FoEditorSounds.BACK);
             return;
         }
 
         if (rawSlot == ADMIN_EDIT_ENCHANTABLE_SLOT) {
-            viewState.adminItemDraft = draft.withAllowOrderEnchants(!draft.allowOrderEnchants());
+            boolean enabled = !draft.allowOrderEnchants();
+            viewState.adminItemDraft = draft.withAllowOrderEnchants(enabled);
+            manager.editorSounds().toggle(player, enabled);
             openAdminItemEditMenu(player);
             return;
         }
@@ -649,12 +696,14 @@ final class OrdersMenuActionSupport {
         if (rawSlot == ADMIN_EDIT_COPY_HAND_SLOT || rawSlot == ADMIN_EDIT_TEMPLATE_SLOT) {
             ItemStack inHand = player.getInventory().getItemInMainHand();
             if (inHand == null || inHand.getType() == Material.AIR) {
+                manager.editorSounds().addItemError(player);
                 manager.messages().send(player, "custom-items.hold-template");
                 return;
             }
 
             ItemStack template = cloneSingleTemplate(inHand);
             if (template == null) {
+                manager.editorSounds().addItemError(player);
                 manager.messages().send(player, "custom-items.hold-template");
                 return;
             }
@@ -663,19 +712,24 @@ final class OrdersMenuActionSupport {
                 resolvedId = generateUniqueCustomItemId(template);
             }
             viewState.adminItemDraft = draft.withTemplate(template).withItemId(resolvedId);
+            manager.editorSounds().addItem(player);
             openAdminItemEditMenu(player);
             return;
         }
 
         if (rawSlot == ADMIN_EDIT_DELETE_SLOT && draft.existingId() != null) {
             if (isCustomItemInUse(draft.existingId())) {
+                manager.editorSounds().error(player);
                 manager.messages().send(player, "custom-items.in-use");
                 return;
             }
             if (customItemStore.remove(draft.existingId())) {
+                manager.editorSounds().delete(player);
                 manager.invalidateItemSelectCaches();
                 manager.messages().send(player, "custom-items.removed", PluginMessages.placeholders("id", draft.existingId()));
                 manager.fileLogger().info("Admin " + player.getName() + " removed custom item " + draft.existingId() + ".");
+            } else {
+                manager.editorSounds().error(player);
             }
             viewState.adminItemDraft = null;
             openAdminItemEditorMenu(player, false);
@@ -685,6 +739,7 @@ final class OrdersMenuActionSupport {
         if (rawSlot == ADMIN_EDIT_SAVE_SLOT) {
             ItemStack template = draft.template();
             if (template == null || template.getType() == Material.AIR || !template.getType().isItem()) {
+                manager.editorSounds().error(player);
                 manager.messages().send(player, "custom-items.valid-template-required");
                 return;
             }
@@ -701,10 +756,12 @@ final class OrdersMenuActionSupport {
                 customItemStore.save(saveId, template, draft.allowOrderEnchants());
                 manager.invalidateItemSelectCaches();
             } catch (IllegalArgumentException exception) {
+                manager.editorSounds().error(player);
                 manager.messages().send(player, "custom-items.save-failed", PluginMessages.placeholders("error", exception.getMessage()));
                 return;
             }
 
+            manager.editorSounds().save(player);
             manager.messages().send(player, "custom-items.saved", PluginMessages.placeholders("id", saveId));
             manager.fileLogger().info("Admin " + player.getName() + " saved custom item " + saveId + ".");
             viewState.adminItemDraft = null;
@@ -721,6 +778,7 @@ final class OrdersMenuActionSupport {
         AdminItemDraft draft = viewState.getOrCreateAdminItemDraft();
         ItemStack templateSource = event.getNewItems().get(ADMIN_EDIT_TEMPLATE_SLOT);
         if (templateSource == null || templateSource.getType() == Material.AIR || !templateSource.getType().isItem()) {
+            manager.editorSounds().addItemError(player);
             return;
         }
 
@@ -758,6 +816,7 @@ final class OrdersMenuActionSupport {
             resolvedId = generateUniqueCustomItemId(template);
         }
         viewState.adminItemDraft = draft.withTemplate(template).withItemId(resolvedId);
+        manager.editorSounds().addItem(player);
         openAdminItemEditMenu(player);
     }
 
@@ -787,13 +846,14 @@ final class OrdersMenuActionSupport {
         int nextSlot = guiItemSlot("history.next-page", HISTORY_NEXT_SLOT, inventorySize);
 
         if (rawSlot == backToOrdersSlot) {
-            openOrdersMenu(player, null);
+            openOrdersMenu(player, null, GUI_BACK_SOUND);
             return;
         }
 
         if (rawSlot == orderTabSlot && viewState.historyType != HistoryDataStore.HistoryType.ORDER) {
             viewState.historyType = HistoryDataStore.HistoryType.ORDER;
             viewState.historyPage = 1;
+            manager.playSound(player, GUI_SELECT_SOUND);
             openHistoryMenu(player, false);
             return;
         }
@@ -801,12 +861,14 @@ final class OrdersMenuActionSupport {
         if (rawSlot == deliverTabSlot && viewState.historyType != HistoryDataStore.HistoryType.DELIVER) {
             viewState.historyType = HistoryDataStore.HistoryType.DELIVER;
             viewState.historyPage = 1;
+            manager.playSound(player, GUI_SELECT_SOUND);
             openHistoryMenu(player, false);
             return;
         }
 
         if (rawSlot == backSlot && viewState.historyPage > 1) {
             viewState.historyPage--;
+            manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openHistoryMenu(player, false);
             return;
         }
@@ -818,6 +880,7 @@ final class OrdersMenuActionSupport {
             int pageCount = calculatePageCount(entries.size(), HISTORY_PAGE_CAPACITY);
             if (viewState.historyPage < pageCount) {
                 viewState.historyPage++;
+                manager.playSound(player, GUI_PAGE_NEXT_SOUND);
                 openHistoryMenu(player, false);
             }
         }
@@ -837,6 +900,7 @@ final class OrdersMenuActionSupport {
         if (rawSlot == sortSlot) {
             itemSelectState.sortIndex = (itemSelectState.sortIndex + 1) % ITEM_SORT_OPTIONS.size();
             itemSelectState.page = 1;
+            manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND, 0.04f);
             refreshItemSelectMenuDebounced(player);
             return;
         }
@@ -844,17 +908,20 @@ final class OrdersMenuActionSupport {
         if (rawSlot == filterSlot) {
             itemSelectState.filterIndex = (itemSelectState.filterIndex + 1) % FILTER_OPTIONS.size();
             itemSelectState.page = 1;
+            manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND, 0.04f);
             refreshItemSelectMenuDebounced(player);
             return;
         }
 
         if (rawSlot == searchSlot) {
+            manager.playSound(player, GUI_SEARCH_SOUND);
             openSignInput(player, SignInputType.ITEM_SEARCH);
             return;
         }
 
         if (rawSlot == backSlot && itemSelectState.page > 1) {
             itemSelectState.page--;
+            manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openItemSelectMenu(player, false);
             return;
         }
@@ -863,6 +930,7 @@ final class OrdersMenuActionSupport {
             int pageCount = Math.max(1, (int) Math.ceil(getFilteredSortedItems(itemSelectState).size() / (double) ITEM_SELECT_PAGE_SIZE));
             if (itemSelectState.page < pageCount) {
                 itemSelectState.page++;
+                manager.playSound(player, GUI_PAGE_NEXT_SOUND);
                 openItemSelectMenu(player, false);
             }
             return;
@@ -923,18 +991,20 @@ final class OrdersMenuActionSupport {
         int controlsSlot = guiItemSlot("enchant-select.controls", ENCHANT_SELECT_INFO_SLOT, inventorySize);
 
         if (rawSlot == doneSlot) {
-            openNewOrderMenu(player);
+            openNewOrderMenu(player, GUI_BACK_SOUND);
             return;
         }
 
         if (rawSlot == clearSlot) {
             viewState.draft = draft.withEnchantLevels(Map.of());
+            manager.playSound(player, GUI_CLEAR_SEARCH_SOUND);
             openEnchantSelectMenu(player, false);
             return;
         }
 
         if (rawSlot == backSlot && viewState.enchantPage > 1) {
             viewState.enchantPage--;
+            manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openEnchantSelectMenu(player, false);
             return;
         }
@@ -943,6 +1013,7 @@ final class OrdersMenuActionSupport {
             int pageCount = Math.max(1, (int) Math.ceil(getSelectableEnchantments(material).size() / (double) ENCHANT_SELECT_PAGE_SIZE));
             if (viewState.enchantPage < pageCount) {
                 viewState.enchantPage++;
+                manager.playSound(player, GUI_PAGE_NEXT_SOUND);
                 openEnchantSelectMenu(player, false);
             }
             return;
@@ -987,6 +1058,7 @@ final class OrdersMenuActionSupport {
         }
 
         viewState.draft = draft.withEnchantLevels(updatedEnchantments);
+        manager.playSoundWithPitchVariation(player, GUI_CYCLE_SOUND, 0.04f);
         openEnchantSelectMenu(player, false);
     }
 
@@ -1000,6 +1072,7 @@ final class OrdersMenuActionSupport {
         NewOrderDraft draft = viewState.getOrCreateDraft();
         CustomItemStore.CustomItemDefinition customSelection = resolveCustomItemDefinition(draft.customItemId());
         if (draft.customItemId() != null && customSelection == null) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.custom-item-missing"));
             viewState.draft = draft.withSelection(null, Material.STONE.name()).withEnchantLevels(Map.of());
             openNewOrderMenu(player);
@@ -1019,24 +1092,28 @@ final class OrdersMenuActionSupport {
 
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         if (playerData.getOrders().size() >= playerMaxOrders) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             manager.messages().send(player, "orders.max-orders", PluginMessages.placeholders("amount", formatCompactAmount(playerMaxOrders)));
             openYourOrdersMenu(player);
             return;
         }
 
         if (customSelection == null && orderMaterial == Material.ENCHANTED_BOOK && sanitizedEnchantments.isEmpty()) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.enchant-required"));
             openNewOrderMenu(player);
             return;
         }
 
         if (customSelection == null && isOrderBlacklisted(orderMaterial, sanitizedEnchantments)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.order-blacklisted"));
             openNewOrderMenu(player);
             return;
         }
 
         if (!hasEconomyProvider()) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
             openNewOrderMenu(player);
             return;
@@ -1044,6 +1121,7 @@ final class OrdersMenuActionSupport {
 
         double subtotal = draft.amount() * draft.pricePerItem();
         if (subtotal <= 0 || !Double.isFinite(subtotal)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.invalid-amount"));
             openNewOrderMenu(player);
             return;
@@ -1051,12 +1129,14 @@ final class OrdersMenuActionSupport {
         double taxAmount = manager.calculateOrderTax(subtotal);
         double totalCost = manager.calculateOrderCreationCost(subtotal);
         if (totalCost <= 0 || !Double.isFinite(totalCost)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.invalid-amount"));
             openNewOrderMenu(player);
             return;
         }
 
         if (!hasEconomyBalance(player, totalCost)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.not-enough-money"));
             openNewOrderMenu(player);
             return;
@@ -1064,6 +1144,7 @@ final class OrdersMenuActionSupport {
 
         EconomyResponse withdrawResponse = withdrawEconomy(player, totalCost);
         if (withdrawResponse == null || !withdrawResponse.transactionSuccess()) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
             openNewOrderMenu(player);
             return;
@@ -1104,6 +1185,7 @@ final class OrdersMenuActionSupport {
         );
         sendOrderCreatedWebhook(player, orderEntry, subtotal);
         announceCreatedOrderInChat(player, orderEntry, subtotal);
+        manager.playSound(player, ORDER_CREATED_SOUND);
 
         viewState.draft = NewOrderDraft.defaults();
         openYourOrdersMenu(player);
