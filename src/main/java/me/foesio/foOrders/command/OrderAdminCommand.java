@@ -47,10 +47,7 @@ public final class OrderAdminCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             plugin.fileLogger().info("Admin " + sender.getName() + " used version command.");
-            String pluginVersion = plugin.getDescription() == null ? "unknown" : plugin.getDescription().getVersion();
-            ordersMenuManager.messages().send(sender, "admin.version-author", PluginMessages.placeholders("author", "Carrotio"));
-            ordersMenuManager.messages().send(sender, "admin.version-number", PluginMessages.placeholders("version", pluginVersion == null ? "unknown" : pluginVersion));
-            updateNotices.sendVersion(sender);
+            updateNotices.checkAndSendVersion(sender);
             return true;
         }
 

@@ -53,7 +53,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
 
     @Override
     public boolean open(Player player, EnchantDialogRequest request, Consumer<EnchantDialogAction> onAction) {
-        if (!config.enabled() || !support.canUseNativeDialogs() || player == null || !player.isOnline() || request == null) {
+        if (!config.enabled() || !support.canUseNativeDialogs(player) || player == null || !player.isOnline() || request == null) {
             return false;
         }
 

@@ -345,6 +345,10 @@ public final class OrdersMenuManager implements Listener {
         return guiConfigManager.buttons();
     }
 
+    GuiButtonConfig guiButtons(String guiPath) {
+        return guiConfigManager.buttons(guiPath);
+    }
+
     int itemSelectContentRevision() {
         return itemSelectContentRevision.get();
     }

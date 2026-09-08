@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>me.foesio</groupId>
     <artifactId>FoOrders</artifactId>
-    <version>3.9</version>
+    <version>4.1</version>
     <packaging>jar</packaging>
     <name>FoOrders</name>
     <properties>
@@ -78,12 +78,6 @@
             <groupId>me.foesio</groupId>
             <artifactId>fo-plugin-core</artifactId>
             <version>1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>1.21.10-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.papermc.paper</groupId>

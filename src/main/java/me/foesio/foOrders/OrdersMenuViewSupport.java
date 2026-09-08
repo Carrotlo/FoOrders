@@ -4,6 +4,8 @@ import me.foesio.foOrders.config.GuiConfigManager;
 import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.gui.EntryBrowserMenus;
 import me.foesio.core.gui.EntryBrowserRequest;
+import me.foesio.core.gui.FoButtonStyle;
+import me.foesio.core.editor.EditorItemFactory;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.dialog.EnchantDialogAction;
 import me.foesio.foOrders.dialog.EnchantDialogRequest;
@@ -133,6 +135,12 @@ final class OrdersMenuViewSupport {
     }
 
     private void openMenu(Player player, Inventory menu, String transitionSound) {
+        for (int slot = 0; slot < menu.getSize(); slot++) {
+            ItemStack item = menu.getItem(slot);
+            if (item != null) {
+                menu.setItem(slot, manager.itemSupport.renderForViewer(player, item));
+            }
+        }
         if (hasScreenChanged(player, menu)) {
             if (transitionSound != null && !transitionSound.isBlank()) {
                 manager.playSound(player, transitionSound);
@@ -181,12 +189,25 @@ final class OrdersMenuViewSupport {
         return manager.itemSupport.createSimpleItem(material, displayName, loreLines);
     }
 
+    private ItemStack createSimpleItem(Material material, String displayName, List<String> loreLines, Integer customModelData) {
+        ItemStack item = createSimpleItem(material, displayName, loreLines);
+        if (customModelData == null) {
+            return item;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setCustomModelData(customModelData);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
     private ItemStack createGuiItem(String path, Material material, String displayName, List<String> loreLines) {
         int revision = refreshGuiItemCachesIfNeeded();
         StaticGuiItemKey key = new StaticGuiItemKey(revision, path, material, displayName, loreLines);
         ItemStack template = staticGuiItemTemplates.computeIfAbsent(key, ignored -> {
             GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, loreLines);
-            return createSimpleItem(item.material(), item.name(), item.lore());
+            return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
         });
         return template.clone();
     }
@@ -196,7 +217,7 @@ final class OrdersMenuViewSupport {
             return createGuiItem(path, material, displayName, loreLines);
         }
         GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, loreLines, placeholders);
-        return createSimpleItem(item.material(), item.name(), item.lore());
+        return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
     }
 
     private ItemStack createGuiItem(
@@ -215,7 +236,7 @@ final class OrdersMenuViewSupport {
             placeholders,
             hiddenLorePlaceholders
         );
-        return createSimpleItem(item.material(), item.name(), item.lore());
+        return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
     }
 
     private ItemStack createGuiCyclingItem(String path, Material material, String displayName, List<String> options, int selectedIndex, String accentColor, String defaultColor) {
@@ -225,12 +246,12 @@ final class OrdersMenuViewSupport {
         CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, material, displayName, options, selectedIndex, selectedColor, defaultColor);
         ItemStack template = cyclingGuiItemTemplates.computeIfAbsent(key, ignored -> {
             GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, List.of());
-            List<String> lore = new ArrayList<>();
+            List<String> information = new ArrayList<>();
             for (int i = 0; i < options.size(); i++) {
                 boolean selected = i == selectedIndex;
-                lore.add((selected ? selectedColor + "» " : defaultColor + "• ") + options.get(i));
+                information.add((selected ? selectedColor + "» " : defaultColor + "• ") + options.get(i));
             }
-            return createSimpleItem(item.material(), item.name(), lore);
+            return createSimpleItem(item.material(), item.name(), FoButtonStyle.buttonLore(information, "cycle"), item.customModelData());
         });
         return template.clone();
     }
@@ -255,8 +276,8 @@ final class OrdersMenuViewSupport {
         return manager.guis().slots(path, fallback, inventorySize);
     }
 
-    private ItemStack createSearchGuiItem(String searchText) {
-        return manager.guiButtons().search(searchText);
+    private ItemStack createSearchGuiItem(String guiPath, Player player, String searchText) {
+        return manager.guiButtons(guiPath).search(player, searchText);
     }
 
     private ItemStack createCyclingItem(Material material, String name, List<String> options, int selectedIndex) {
@@ -441,16 +462,16 @@ final class OrdersMenuViewSupport {
         populateMainOrders(player, menu, visibleOrders, viewState.page, orderSlots);
 
         if (viewState.page > 1) {
-            menu.setItem(mainBackSlot, manager.guiButtons().previousPage(viewState.page - 1, pageCount - 1));
+            menu.setItem(mainBackSlot, manager.guiButtons("main").previousPage(player, viewState.page - 1, pageCount - 1));
         }
         if (viewState.page < pageCount) {
-            menu.setItem(mainNextSlot, manager.guiButtons().nextPage(viewState.page - 1, pageCount - 1));
+            menu.setItem(mainNextSlot, manager.guiButtons("main").nextPage(player, viewState.page - 1, pageCount - 1));
         }
 
         menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main-sort-options", SORT_OPTIONS), playerData.getSortIndex(), ACCENT, WHITE));
         menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), playerData.getFilterIndex(), ACCENT, WHITE));
         menu.setItem(refreshSlot, createGuiItem("main.refresh", Material.MAP, ACCENT + "ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to refresh")));
-        menu.setItem(searchSlot, createSearchGuiItem(viewState.search));
+        menu.setItem(searchSlot, createSearchGuiItem("main", player, viewState.search));
         menu.setItem(yourOrdersSlot, createGuiItem("main.your-orders", Material.BOOK, ACCENT + "ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to view your Orders")));
         if (canOpenOwnHistory(player)) {
             menu.setItem(historySlot, createGuiItem("main.history", Material.WRITABLE_BOOK, ACCENT + "ʜɪꜱᴛᴏʀʏ", List.of(
@@ -632,13 +653,13 @@ final class OrdersMenuViewSupport {
             filterSlot,
             createGuiCyclingItem("item-select.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), itemSelectState.filterIndex, ACCENT, WHITE)
         );
-        menu.setItem(searchSlot, createSearchGuiItem(itemSelectState.search));
+        menu.setItem(searchSlot, createSearchGuiItem("item-select", player, itemSelectState.search));
 
         if (itemSelectState.page > 1) {
-            menu.setItem(backSlot, manager.guiButtons().previousPage(itemSelectState.page - 1, pageCount - 1));
+            menu.setItem(backSlot, manager.guiButtons("item-select").previousPage(player, itemSelectState.page - 1, pageCount - 1));
         }
         if (itemSelectState.page < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons().nextPage(itemSelectState.page - 1, pageCount - 1));
+            menu.setItem(nextSlot, manager.guiButtons("item-select").nextPage(player, itemSelectState.page - 1, pageCount - 1));
         }
 
         openMenu(player, menu);
@@ -696,10 +717,10 @@ final class OrdersMenuViewSupport {
         }
 
         if (viewState.enchantPage > 1) {
-            menu.setItem(backSlot, manager.guiButtons().previousPage(viewState.enchantPage - 1, pageCount - 1));
+            menu.setItem(backSlot, manager.guiButtons("enchant-select").previousPage(player, viewState.enchantPage - 1, pageCount - 1));
         }
         if (viewState.enchantPage < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons().nextPage(viewState.enchantPage - 1, pageCount - 1));
+            menu.setItem(nextSlot, manager.guiButtons("enchant-select").nextPage(player, viewState.enchantPage - 1, pageCount - 1));
         }
 
         menu.setItem(
@@ -887,14 +908,19 @@ final class OrdersMenuViewSupport {
         }
         menu.setItem(
             claimSlot,
-            createGuiItem("manage-order.claim", Material.CHEST, CONFIRM_GREEN + "ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ", createManageClaimLore(order))
+            createGuiItem(
+                "manage-order.claim",
+                Material.CHEST,
+                CONFIRM_GREEN + "ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ",
+                FoButtonStyle.buttonLore(createManageClaimLore(order), "claim order")
+            )
         );
         if (canModerateOrders(player)) {
             double remainingFunds = getRemainingOrderFunds(order);
             menu.setItem(
                 MANAGE_ADMIN_ACTIONS_SLOT,
                 createSimpleItem(
-                    Material.BARRIER,
+                    Material.LAVA_BUCKET,
                     CANCEL_RED + "ᴀᴅᴍɪɴ ᴀᴄᴛɪᴏɴꜱ",
                     List.of(
                         WHITE + "Open admin moderation for this order",
@@ -949,10 +975,10 @@ final class OrdersMenuViewSupport {
         }
 
         if (viewState.claimPage > 1) {
-            menu.setItem(backSlot, manager.guiButtons().previousPage(viewState.claimPage - 1, pageCount - 1));
+            menu.setItem(backSlot, manager.guiButtons("claim-order").previousPage(player, viewState.claimPage - 1, pageCount - 1));
         }
         if (viewState.claimPage < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons().nextPage(viewState.claimPage - 1, pageCount - 1));
+            menu.setItem(nextSlot, manager.guiButtons("claim-order").nextPage(player, viewState.claimPage - 1, pageCount - 1));
         }
         menu.setItem(
             dropPageSlot,
@@ -986,7 +1012,7 @@ final class OrdersMenuViewSupport {
         menu.setItem(ADMIN_PREVIEW_SLOT, createOrderItem(ownerName, order, false));
         menu.setItem(
             ADMIN_DELETE_SLOT,
-            createSimpleItem(Material.BARRIER, CANCEL_RED + "ᴅᴇʟᴇᴛᴇ ᴏʀᴅᴇʀ", List.of(
+            createSimpleItem(Material.LAVA_BUCKET, CANCEL_RED + "ᴅᴇʟᴇᴛᴇ ᴏʀᴅᴇʀ", List.of(
                 WHITE + "Delete order and all claimable items",
                 remainingFunds > 0D
                     ? WHITE + "Refund owner: " + ACCENT + "$" + formatCompactAmount(remainingFunds)
@@ -1051,15 +1077,18 @@ final class OrdersMenuViewSupport {
             .filter(viewState.adminEditorSearch)
             .buttons(manager.guiButtons())
             .showBack(false)
-            .addButton(createSimpleItem(
+            .addButton(EditorItemFactory.button(
+                player,
                 Material.ANVIL,
-                CONFIRM_GREEN + "ᴀᴅᴅ ɪᴛᴇᴍ",
+                CONFIRM_GREEN,
+                ":anvil: Add Item",
                 List.of(
                     WHITE + "Create a new custom order item",
                     MUTED + "Includes name, lore, model data, enchants, etc."
-                )
+                ),
+                "add an item"
             ))
-            .emptyItem(createSimpleItem(Material.PAPER, MUTED + "ɴᴏ ᴄᴜꜱᴛᴏᴍ ɪᴛᴇᴍꜱ", List.of(
+            .emptyItem(EditorItemFactory.item(player, Material.PAPER, MUTED + "No Custom Items", List.of(
                 WHITE + "Create one with the Anvil button"
             )))
             .context(new AdminCustomItemBrowserContext())
@@ -1067,7 +1096,7 @@ final class OrdersMenuViewSupport {
 
         int maxPage = EntryBrowserMenus.maxPage(request);
         viewState.adminEditorPage = Math.max(0, Math.min(viewState.adminEditorPage, maxPage));
-        openMenu(player, EntryBrowserMenus.createInventory(request.withPage(viewState.adminEditorPage)), transitionSound);
+        openMenu(player, EntryBrowserMenus.createInventory(player, request.withPage(viewState.adminEditorPage)), transitionSound);
     }
 
     private List<CustomItemStore.CustomItemDefinition> getFilteredAdminCustomItems(String rawFilter) {
@@ -1102,9 +1131,10 @@ final class OrdersMenuViewSupport {
         String resolvedId = draft.itemId() == null ? "custom_item" : draft.itemId();
         menu.setItem(
             ADMIN_EDIT_ID_SLOT,
-            createSimpleItem(
+            EditorItemFactory.item(
+                player,
                 Material.PAPER,
-                ACCENT + "ɪᴅ",
+                ACCENT + "&lID",
                 List.of(
                     WHITE + resolvedId,
                     MUTED + "Set automatically from your template item"
@@ -1113,14 +1143,17 @@ final class OrdersMenuViewSupport {
         );
         menu.setItem(
             ADMIN_EDIT_COPY_HAND_SLOT,
-            createSimpleItem(
+            EditorItemFactory.button(
+                player,
                 Material.ANVIL,
-                ACCENT + "ꜱᴇᴛ ꜰʀᴏᴍ ʜᴀɴᴅ",
+                ACCENT,
+                ":anvil: Set From Hand",
                 List.of(
                     WHITE + "Hold the item in your main hand",
                     WHITE + "Click here to copy it as template",
                     MUTED + "Or drag/click an item onto the template slot"
-                )
+                ),
+                "set the template item"
             )
         );
 
@@ -1128,14 +1161,17 @@ final class OrdersMenuViewSupport {
         if (template == null || template.getType() == Material.AIR) {
             menu.setItem(
                 ADMIN_EDIT_TEMPLATE_SLOT,
-                createSimpleItem(
+                EditorItemFactory.button(
+                    player,
                     Material.GRAY_STAINED_GLASS_PANE,
-                    MUTED + "ɴᴏ ᴛᴇᴍᴘʟᴀᴛᴇ",
+                    MUTED,
+                    "No Template",
                     List.of(
                         WHITE + "Drag or click an item onto this slot",
                         WHITE + "Or use 'Set from hand'",
                         MUTED + "This stores name/lore/model data/enchants/etc."
-                    )
+                    ),
+                    "set the template item"
                 )
             );
         } else {
@@ -1146,9 +1182,12 @@ final class OrdersMenuViewSupport {
                 ? new ArrayList<>(templateMeta.getLore())
                 : new ArrayList<>();
             lore.add("");
-            lore.add(WHITE + "This item is used as the order template");
-            lore.add(MUTED + "Drag/click another item here to replace it");
-            lore.add(MUTED + "Or use 'Set from hand' again");
+            lore.add(FoButtonStyle.INFO_HEADER);
+            lore.add(FoButtonStyle.informationLine("This item is used as the order template"));
+            lore.add(FoButtonStyle.informationLine("Drag/click another item here to replace it"));
+            lore.add(FoButtonStyle.informationLine("Or use 'Set from hand' again"));
+            lore.add("");
+            lore.add(FoButtonStyle.clickHint("replace the template item"));
             if (templateMeta != null) {
                 templateMeta.setLore(lore);
                 templatePreview.setItemMeta(templateMeta);
@@ -1158,37 +1197,48 @@ final class OrdersMenuViewSupport {
 
         menu.setItem(
             ADMIN_EDIT_ENCHANTABLE_SLOT,
-            createSimpleItem(
+            EditorItemFactory.button(
+                player,
                 draft.allowOrderEnchants() ? Material.ENCHANTED_BOOK : Material.BOOK,
-                ACCENT + "ᴏʀᴅᴇʀ ᴇɴᴄʜᴀɴᴛꜱ",
+                ACCENT,
+                "Order Enchants",
                 List.of(
-                    draft.allowOrderEnchants()
-                        ? CONFIRM_GREEN + "Enabled"
-                        : CANCEL_RED + "Disabled",
+                    FoButtonStyle.stateLine(draft.allowOrderEnchants()),
                     WHITE + "If enabled, orderers can choose enchantments",
                     WHITE + "like normal tool orders."
-                )
+                ),
+                "toggle order enchants"
             )
         );
         menu.setItem(
             ADMIN_EDIT_SAVE_SLOT,
-            createSimpleItem(Material.LIME_STAINED_GLASS_PANE, CONFIRM_GREEN + "ꜱᴀᴠᴇ", List.of(WHITE + "Save this custom item"))
+            EditorItemFactory.button(
+                player,
+                Material.LIME_STAINED_GLASS_PANE,
+                CONFIRM_GREEN,
+                "Save",
+                List.of(WHITE + "Save this custom item"),
+                "save the custom item"
+            )
         );
         menu.setItem(
             ADMIN_EDIT_CANCEL_SLOT,
-            manager.guiButtons().back()
+            manager.guiButtons().back(player)
         );
 
         if (draft.existingId() != null) {
             menu.setItem(
                 ADMIN_EDIT_DELETE_SLOT,
-                createSimpleItem(
-                    Material.BARRIER,
-                    CANCEL_RED + "ʀᴇᴍᴏᴠᴇ",
+                EditorItemFactory.button(
+                    player,
+                    Material.LAVA_BUCKET,
+                    CANCEL_RED,
+                    "Remove",
                     List.of(
                         WHITE + "Remove this custom item",
                         MUTED + "Blocked while active orders still use it"
-                    )
+                    ),
+                    "remove the custom item"
                 )
             );
         }
@@ -1208,11 +1258,12 @@ final class OrdersMenuViewSupport {
         meta.setDisplayName(ACCENT + displayName);
         List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
         lore.add("");
-        lore.add(WHITE + "ID: " + ACCENT + definition.id());
-        lore.add(WHITE + "Order enchants: " + (definition.allowOrderEnchants() ? CONFIRM_GREEN + "Enabled" : CANCEL_RED + "Disabled"));
+        lore.add(FoButtonStyle.INFO_HEADER);
+        lore.add(FoButtonStyle.informationLine("ID: " + ACCENT + definition.id()));
+        lore.add(FoButtonStyle.informationLine("Order enchants: " + FoButtonStyle.stateText(definition.allowOrderEnchants())));
         lore.add("");
-        lore.add(WHITE + "Left click to edit");
-        lore.add(WHITE + "Shift + Right click to remove");
+        lore.add(FoButtonStyle.clickHint("edit the item"));
+        lore.add(FoButtonStyle.informationLine("Shift + Right Click to remove"));
         meta.setLore(lore);
         preview.setItemMeta(meta);
         return preview;
@@ -1377,14 +1428,14 @@ final class OrdersMenuViewSupport {
         );
         menu.setItem(
             backToOrdersSlot,
-            manager.guiButtons().back()
+            manager.guiButtons("history").back(player)
         );
 
         if (viewState.historyPage > 1) {
-            menu.setItem(backSlot, manager.guiButtons().previousPage(viewState.historyPage - 1, pageCount - 1));
+            menu.setItem(backSlot, manager.guiButtons("history").previousPage(player, viewState.historyPage - 1, pageCount - 1));
         }
         if (viewState.historyPage < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons().nextPage(viewState.historyPage - 1, pageCount - 1));
+            menu.setItem(nextSlot, manager.guiButtons("history").nextPage(player, viewState.historyPage - 1, pageCount - 1));
         }
         openMenu(player, menu);
     }

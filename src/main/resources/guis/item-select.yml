@@ -1,0 +1,75 @@
+# Public item selection menu.
+title: "&8ꜱᴇʟᴇᴄᴛ ɪᴛᴇᴍ"
+
+labels:
+  item-sort-options:
+    - "A-Z"
+    - "Z-A"
+  filter-options:
+    - "All"
+    - "Blocks"
+    - "Tools"
+    - "Food"
+    - "Combat"
+    - "Potions"
+    - "Books"
+    - "Ingredients"
+    - "Utilities"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: "{theme}&lBACK"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: "{theme}&lSEARCH"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  sort:
+    slot: 48
+    material: CAULDRON
+    name: "{theme}&lSORT"
+  filter:
+    slot: 49
+    material: HOPPER
+    name: "{theme}&lFILTER"
+  search:
+    slot: 50
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53

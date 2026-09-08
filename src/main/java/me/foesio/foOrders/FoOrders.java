@@ -6,6 +6,7 @@ import me.foesio.core.dialog.DialogService;
 import me.foesio.core.dialog.NativeDialogConfigDefaults;
 import me.foesio.core.discord.DiscordWebhookConfigDefaults;
 import me.foesio.core.logging.FoFileLogger;
+import me.foesio.core.message.FoMessageService;
 import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.scheduler.FoScheduler;
@@ -67,7 +68,9 @@ public final class FoOrders extends JavaPlugin {
         guiSounds = FoGuiSounds.create(sounds);
         messages = new PluginMessages(this);
         messages.reload();
-        guiConfigManager = new GuiConfigManager(this);
+        messages.migrateSprites(core.migrations(), 1);
+        messages.migratePrefix(core.migrations(), 2);
+        guiConfigManager = new GuiConfigManager(this, core.migrations());
         guiConfigManager.reload();
         FoScheduler schedulerAdapter = core.scheduler();
         getLogger().info("FoOrders scheduler mode: " + (schedulerAdapter.isFolia() ? "Folia-compatible bridge" : "Bukkit scheduler"));

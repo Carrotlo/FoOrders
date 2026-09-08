@@ -1,6 +1,8 @@
 package me.foesio.foOrders;
 
 import me.foesio.foOrders.util.TextFormat;
+import me.foesio.core.dialog.DialogIcons;
+import me.foesio.core.editor.EditorItemFactory;
 import me.foesio.core.number.LargeNumberParser;
 import me.foesio.core.number.NumberFormatters;
 import me.foesio.foOrders.storage.CustomItemStore;
@@ -146,35 +148,20 @@ final class OrdersMenuItemSupport {
         String accentColor,
         String defaultColor
     ) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) {
-            return item;
-        }
-
-        meta.setDisplayName(accentColor + name);
         List<String> lore = new ArrayList<>();
         for (int i = 0; i < options.size(); i++) {
             String color = i == selectedIndex ? accentColor : defaultColor;
             lore.add(color + "• " + options.get(i));
         }
-
-        meta.setLore(lore);
-        item.setItemMeta(meta);
-        return item;
+        return EditorItemFactory.templateButton(material, accentColor, name, lore, "cycle");
     }
 
     ItemStack createSimpleItem(Material material, String displayName, List<String> loreLines) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta == null) {
-            return item;
-        }
+        return EditorItemFactory.templateItem(material, displayName, loreLines);
+    }
 
-        meta.setDisplayName(displayName);
-        meta.setLore(loreLines);
-        item.setItemMeta(meta);
-        return item;
+    ItemStack renderForViewer(Player player, ItemStack item) {
+        return DialogIcons.forViewer(player, item);
     }
 
     ItemStack createOrderStack(PlayerDataStore.OrderEntry order, int amount) {
@@ -740,7 +727,13 @@ final class OrdersMenuItemSupport {
 
     ItemStack createOrderableSelectItem(OrderableItemOption option) {
         if (!option.isCustom()) {
-            return createSimpleItem(option.material(), LIGHT_ACCENT + option.displayName(), List.of(WHITE + "Click to Select"));
+            return EditorItemFactory.templateButton(
+                option.material(),
+                LIGHT_ACCENT,
+                option.displayName(),
+                List.of("Select this item."),
+                "select item"
+            );
         }
 
         ItemStack preview = option.previewItem().clone();

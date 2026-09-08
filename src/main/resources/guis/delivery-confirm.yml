@@ -1,0 +1,26 @@
+# Public delivery confirmation menu.
+title: "&8ᴄᴏɴꜰɪʀᴍᴀᴛɪᴏɴ"
+
+items:
+  cancel:
+    slot: 11
+    material: RED_STAINED_GLASS_PANE
+    name: "#ff5d73&lCANCEL"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn without delivering the order."
+      - " "
+      - "{good}→ Click to Cancel ←"
+  confirm:
+    slot: 15
+    material: LIME_STAINED_GLASS_PANE
+    name: "#3ecf8e&lCONFIRM"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fConfirm delivery of this order."
+      - " "
+      - "{good}→ Click to Confirm Delivery ←"

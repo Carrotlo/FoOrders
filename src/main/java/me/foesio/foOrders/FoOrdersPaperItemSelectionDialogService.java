@@ -96,7 +96,7 @@ final class FoOrdersPaperItemSelectionDialogService implements FoOrdersItemSelec
         Consumer<OrderableItemOption> onSelect,
         Runnable onFallback
     ) {
-        if (player == null || !player.isOnline() || !support.canUseNativeDialogs() || onSelect == null) {
+        if (player == null || !player.isOnline() || !support.canUseNativeDialogs(player) || onSelect == null) {
             return false;
         }
 

@@ -106,8 +106,8 @@ public final class FoOrdersDialogInputService {
         return support != null && support.warnOnFallback();
     }
 
-    public boolean willUseFallback() {
-        return nativeEnabled() && (support == null || !support.canUseNativeDialogs() || inputs == null);
+    public boolean willUseFallback(Player player) {
+        return nativeEnabled() && (support == null || !support.canUseNativeDialogs(player) || inputs == null);
     }
 
     public boolean openEnchantSelection(
@@ -121,7 +121,7 @@ public final class FoOrdersDialogInputService {
             || request == null
             || onAction == null
             || support == null
-            || !support.canUseNativeDialogs()
+            || !support.canUseNativeDialogs(player)
             || currentService == null) {
             return false;
         }

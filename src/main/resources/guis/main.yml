@@ -1,0 +1,150 @@
+# Public /orders menu. Text and item presentation are configurable here.
+title: "&8ᴏʀᴅᴇʀꜱ (ᴘᴀɢᴇ {page})"
+
+labels:
+  main-sort-options:
+    - "Most Paid"
+    - "Most Delivered"
+    - "Recently Listed"
+    - "Most Money Per Item"
+  filter-options:
+    - "All"
+    - "Blocks"
+    - "Tools"
+    - "Food"
+    - "Combat"
+    - "Potions"
+    - "Books"
+    - "Ingredients"
+    - "Utilities"
+
+layout:
+  order-slots:
+    - 10
+    - 11
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    - 19
+    - 20
+    - 21
+    - 22
+    - 23
+    - 24
+    - 25
+    - 28
+    - 29
+    - 30
+    - 31
+    - 32
+    - 33
+    - 34
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: "{theme}&lBACK"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: "{theme}&lSEARCH"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  gray-pane:
+    material: GRAY_STAINED_GLASS_PANE
+    name: ""
+  black-pane:
+    material: GRAY_STAINED_GLASS_PANE
+    name: ""
+  empty-order-slot:
+    material: LIGHT_GRAY_STAINED_GLASS_PANE
+    name: ""
+  order-entry:
+    name: "{theme}{owner}'s Order"
+    lore:
+      amount: "{theme}{amount} #ffffff{item}"
+      price: "{theme}${price} #ffffffeach"
+      delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
+      paid: "#a7b8b0${paid}/#3ecf8e${total} #a7b8b0Paid"
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  sort:
+    slot: 47
+    material: CAULDRON
+    name: "{theme}&lSORT"
+  filter:
+    slot: 48
+    material: HOPPER
+    name: "{theme}&lFILTER"
+  refresh:
+    slot: 49
+    material: MAP
+    name: "{theme}&lORDERS"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fRefreshes the current page."
+      - " "
+      - "{good}→ Click to Refresh ←"
+  search:
+    slot: 50
+  your-orders:
+    slot: 51
+    material: BOOK
+    name: "{theme}&lYOUR ORDERS"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fManage your active orders."
+      - " "
+      - "{good}→ Click to View Orders ←"
+  history:
+    slot: 52
+    material: WRITABLE_BOOK
+    name: "{theme}&lHISTORY"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fView order and delivery history."
+      - " "
+      - "{good}→ Click to View History ←"

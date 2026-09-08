@@ -342,6 +342,15 @@ final class OrdersMenuInteractionSupport {
             return;
         }
 
+        if (menuHolder.getMenuType() == MenuType.NEW_ORDER) {
+            scheduler.runForPlayer(player, () -> {
+                if (player.isOnline() && !manager.isOrdersMenu(player.getOpenInventory().getTopInventory())) {
+                    manager.viewSupport.openYourOrdersMenu(player);
+                }
+            });
+            return;
+        }
+
         scheduler.runForPlayer(player, () -> {
             if (player.isOnline()) {
                 manager.viewSupport.openYourOrdersMenu(player);

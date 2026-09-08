@@ -137,11 +137,12 @@ final class OrdersMenuInputSupport {
 
         FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
         if (dialogInputService != null) {
-            boolean suppressInventoryClose = manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
+            boolean fallback = dialogInputService.willUseFallback(player);
+            boolean suppressInventoryClose = !fallback && manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
             if (suppressInventoryClose) {
                 inventoryCloseSuppressor.suppressNextClose(player);
             }
-            if (dialogInputService.willUseFallback()) {
+            if (fallback) {
                 warnNativeDialogFallback(player);
             }
 
@@ -179,11 +180,12 @@ final class OrdersMenuInputSupport {
             return;
         }
 
-        boolean suppressInventoryClose = manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
+        boolean fallback = dialogInputService.willUseFallback(player);
+        boolean suppressInventoryClose = !fallback && manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
         if (suppressInventoryClose) {
             inventoryCloseSuppressor.suppressNextClose(player);
         }
-        if (dialogInputService.willUseFallback()) {
+        if (fallback) {
             warnNativeDialogFallback(player);
         }
 

@@ -1,6 +1,9 @@
 package me.foesio.foOrders;
 
+import me.foesio.core.dialog.DialogIcons;
+import me.foesio.core.message.FoMessageService;
 import me.foesio.core.message.FoStyle;
+import me.foesio.core.migration.FoMigrationStore;
 import me.foesio.core.text.FoText;
 import me.foesio.foOrders.util.TextFormat;
 import net.md_5.bungee.api.chat.BaseComponent;
@@ -98,7 +101,11 @@ public final class PluginMessages {
     public void send(CommandSender sender, String path, Map<String, String> placeholders) {
         String message = get(path, placeholders);
         if (!message.isBlank()) {
-            sender.sendMessage(message);
+            if (sender instanceof Player player) {
+                player.sendMessage(DialogIcons.render(player, message));
+            } else {
+                sender.sendMessage(DialogIcons.fallbackText(message));
+            }
         }
     }
 
@@ -109,7 +116,11 @@ public final class PluginMessages {
     public void sendTemplate(CommandSender sender, String template, Map<String, String> placeholders) {
         String message = renderTemplate(template, placeholders);
         if (!message.isBlank()) {
-            sender.sendMessage(message);
+            if (sender instanceof Player player) {
+                player.sendMessage(DialogIcons.render(player, message));
+            } else {
+                sender.sendMessage(DialogIcons.fallbackText(message));
+            }
         }
     }
 
@@ -119,16 +130,59 @@ public final class PluginMessages {
             return;
         }
         if (!(sender instanceof Player player) || url == null || url.isBlank()) {
-            sender.sendMessage(message);
+            sender.sendMessage(DialogIcons.fallbackText(message));
             return;
         }
 
-        BaseComponent[] components = TextComponent.fromLegacyText(message);
-        ClickEvent clickEvent = new ClickEvent(ClickEvent.Action.OPEN_URL, url);
-        for (BaseComponent component : components) {
-            component.setClickEvent(clickEvent);
-        }
-        player.spigot().sendMessage(components);
+        player.sendMessage(DialogIcons.render(player, message)
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.openUrl(url)));
+    }
+
+    public boolean migrateSprites(FoMigrationStore store, int version) {
+        File messagesFile = new File(plugin.getDataFolder(), FILE_NAME);
+        return store.runToVersion(version, () -> {
+            boolean changed = false;
+            changed |= FoMessageService.addMissingToken(messages, "prefix", ":chest:", null);
+            changed |= FoMessageService.addMissingToken(messages, "admin.usage", ":paper:");
+            changed |= FoMessageService.addMissingToken(messages, "admin.economy-missing", ":redstone:");
+            changed |= FoMessageService.addMissingToken(messages, "admin.reload-success", ":emerald:");
+            changed |= FoMessageService.addMissingToken(messages, "admin.reload-failed", ":redstone:");
+            changed |= FoMessageService.addMissingToken(messages, "custom-items.hold-template", ":paper:");
+            changed |= FoMessageService.addMissingToken(messages, "custom-items.saved", ":emerald:");
+            changed |= FoMessageService.addMissingToken(messages, "custom-items.removed", ":lava_bucket:");
+            changed |= FoMessageService.addMissingToken(messages, "orders.delivered", ":emerald:");
+            changed |= FoMessageService.addMissingToken(messages, "orders.cancelled", ":redstone:");
+            changed |= FoMessageService.addMissingToken(messages, "orders.refunded", ":gold_ingot:");
+            changed |= FoMessageService.addMissingToken(messages, "orders.created-broadcast", ":paper:");
+            if (!changed) {
+                return true;
+            }
+            try {
+                messages.save(messagesFile);
+                return true;
+            } catch (IOException exception) {
+                warn("Could not save sprite migration: " + exception.getMessage());
+                return false;
+            }
+        });
+    }
+
+    public boolean migratePrefix(FoMigrationStore store, int version) {
+        File messagesFile = new File(plugin.getDataFolder(), FILE_NAME);
+        return store.runToVersion(version, () -> {
+            String oldPrefix = ":chest: {theme}FoOrders &8» #a7b8b0";
+            if (!oldPrefix.equals(messages.getString("prefix"))) {
+                return true;
+            }
+            messages.set("prefix", ":chest_minecart: {theme}FoOrders &8» #a7b8b0");
+            try {
+                messages.save(messagesFile);
+                return true;
+            } catch (IOException exception) {
+                warn("Could not save prefix sprite migration: " + exception.getMessage());
+                return false;
+            }
+        });
     }
 
     public static Map<String, String> placeholders(Object... values) {
