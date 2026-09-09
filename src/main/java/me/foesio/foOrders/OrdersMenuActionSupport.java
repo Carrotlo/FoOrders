@@ -8,7 +8,6 @@ import me.foesio.core.sound.FoEditorSounds;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
-import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
@@ -284,7 +283,7 @@ final class OrdersMenuActionSupport {
         return deliverySupport.hasEconomyBalance(player, amount);
     }
 
-    private EconomyResponse withdrawEconomy(Player player, double amount) {
+    private boolean withdrawEconomy(Player player, double amount) {
         return deliverySupport.withdrawEconomy(player, amount);
     }
 
@@ -1142,8 +1141,7 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        EconomyResponse withdrawResponse = withdrawEconomy(player, totalCost);
-        if (withdrawResponse == null || !withdrawResponse.transactionSuccess()) {
+        if (!withdrawEconomy(player, totalCost)) {
             manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
             openNewOrderMenu(player);

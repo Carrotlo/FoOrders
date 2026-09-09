@@ -1,6 +1,7 @@
 package me.foesio.foOrders;
 
 import me.foesio.core.dialog.DialogService;
+import me.foesio.core.economy.VaultEconomyBridge;
 import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.inventory.InventoryDepositService;
@@ -15,7 +16,6 @@ import me.foesio.foOrders.dialog.FoOrdersDialogInputService;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
-import net.milkbowl.vault.economy.Economy;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.DyeColor;
@@ -247,7 +247,7 @@ public final class OrdersMenuManager implements Listener {
     final Object economyLock = new Object();
     volatile Set<Material> blacklistedOrderMaterials = Set.of();
     volatile Set<String> blacklistedOrderNames = Set.of();
-    volatile Economy economy;
+    volatile VaultEconomyBridge economy;
     volatile int maxOrdersPerPlayer = 3;
     volatile long orderMenuRefreshCooldownMillis = DEFAULT_ORDER_MENU_REFRESH_COOLDOWN_MILLIS;
     volatile boolean announceCreatedOrdersInChat = false;
@@ -385,7 +385,7 @@ public final class OrdersMenuManager implements Listener {
         sounds.playWithPitchVariation(player, path, maxVariation);
     }
 
-    public void setEconomy(Economy economy) {
+    public void setEconomy(VaultEconomyBridge economy) {
         synchronized (economyLock) {
             this.economy = economy;
         }

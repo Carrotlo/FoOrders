@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>me.foesio</groupId>
     <artifactId>FoOrders</artifactId>
-    <version>4.1</version>
+    <version>4.3</version>
     <packaging>jar</packaging>
     <name>FoOrders</name>
     <properties>
@@ -77,7 +77,7 @@
         <dependency>
             <groupId>me.foesio</groupId>
             <artifactId>fo-plugin-core</artifactId>
-            <version>1.0</version>
+            <version>1.1</version>
         </dependency>
         <dependency>
             <groupId>io.papermc.paper</groupId>
@@ -112,12 +112,6 @@
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.53.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.MilkBowl</groupId>
-            <artifactId>VaultAPI</artifactId>
-            <version>1.7.1</version>
-            <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>

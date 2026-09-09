@@ -4,6 +4,7 @@ import me.foesio.core.FoCoreContext;
 import me.foesio.core.FoPluginCore;
 import me.foesio.core.dialog.DialogService;
 import me.foesio.core.dialog.NativeDialogConfigDefaults;
+import me.foesio.core.economy.VaultEconomyBridge;
 import me.foesio.core.discord.DiscordWebhookConfigDefaults;
 import me.foesio.core.logging.FoFileLogger;
 import me.foesio.core.message.FoMessageService;
@@ -22,14 +23,12 @@ import me.foesio.foOrders.dialog.FoOrdersDialogInputService;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
-import net.milkbowl.vault.economy.Economy;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.LinkedHashMap;
@@ -168,12 +167,11 @@ public final class FoOrders extends JavaPlugin {
     }
 
     public boolean reloadEconomyHook() {
-        RegisteredServiceProvider<Economy> economyProvider = getServer().getServicesManager().getRegistration(Economy.class);
-        Economy economy = economyProvider == null ? null : economyProvider.getProvider();
+        VaultEconomyBridge economy = core.createVaultEconomy();
         if (ordersMenuManager != null) {
-            ordersMenuManager.setEconomy(economy);
+            ordersMenuManager.setEconomy(economy.isAvailable() ? economy : null);
         }
-        return economy != null;
+        return economy.isAvailable();
     }
 
     public void ensureConfigDefaults() {

@@ -6,7 +6,6 @@ import me.foesio.foOrders.integration.DiscordWebhookNotifier;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
-import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -364,8 +363,7 @@ final class OrdersMenuDeliverySupport {
                 return;
             }
 
-            EconomyResponse payoutResponse = depositEconomy(player, payout);
-            if (payoutResponse == null || !payoutResponse.transactionSuccess()) {
+            if (!depositEconomy(player, payout)) {
                 manager.playSound(player, GUI_ERROR_SOUND);
                 returnPendingItems(player, submittedItems);
                 sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
@@ -921,31 +919,31 @@ final class OrdersMenuDeliverySupport {
 
     boolean hasEconomyProvider() {
         synchronized (economyLock) {
-            return manager.economy != null;
+            return manager.economy != null && manager.economy.isAvailable();
         }
     }
 
     boolean hasEconomyBalance(OfflinePlayer player, double amount) {
         synchronized (economyLock) {
-            return manager.economy != null && manager.economy.has(player, amount);
+            return manager.economy != null && manager.economy.isAvailable() && manager.economy.has(player, amount);
         }
     }
 
-    EconomyResponse withdrawEconomy(OfflinePlayer player, double amount) {
+    boolean withdrawEconomy(OfflinePlayer player, double amount) {
         synchronized (economyLock) {
-            if (manager.economy == null) {
-                return null;
+            if (manager.economy == null || !manager.economy.isAvailable()) {
+                return false;
             }
-            return manager.economy.withdrawPlayer(player, amount);
+            return manager.economy.withdraw(player, amount);
         }
     }
 
-    EconomyResponse depositEconomy(OfflinePlayer player, double amount) {
+    boolean depositEconomy(OfflinePlayer player, double amount) {
         synchronized (economyLock) {
-            if (manager.economy == null) {
-                return null;
+            if (manager.economy == null || !manager.economy.isAvailable()) {
+                return false;
             }
-            return manager.economy.depositPlayer(player, amount);
+            return manager.economy.deposit(player, amount);
         }
     }
 
@@ -959,10 +957,10 @@ final class OrdersMenuDeliverySupport {
         }
 
         OfflinePlayer owner = Bukkit.getOfflinePlayer(ownerId);
-        EconomyResponse response = refund
+        boolean successful = refund
             ? depositEconomy(owner, remainingFunds)
             : withdrawEconomy(owner, remainingFunds);
-        return response != null && response.transactionSuccess();
+        return successful;
     }
 
     boolean isAdminOrderModerationClick(Player player, ClickType clickType) {
