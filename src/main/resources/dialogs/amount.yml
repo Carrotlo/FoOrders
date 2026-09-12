@@ -1,6 +1,6 @@
 # Native dialog shown for item amount input when Paper Dialog API is available.
 # Valid placeholders: {current}, {target}
-# Expected format: positive whole number. Compact suffixes like 1k are accepted.
+# Expected format: positive whole number. Compact suffixes from K through Td are accepted.
 # Invalid values keep current behavior and return to the order GUI.
 title: "#03fc88Number Input"
 body: "#a7b8b0Type a positive whole number."

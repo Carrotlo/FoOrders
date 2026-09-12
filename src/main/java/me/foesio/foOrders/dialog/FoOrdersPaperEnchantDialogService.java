@@ -60,7 +60,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
         try {
             Dialog dialog = Dialog.create(factory -> {
                 DialogRegistryEntry.Builder builder = factory.empty();
-                builder.base(base(request));
+                builder.base(base(player, request));
                 builder.type(DialogType.multiAction(actions(player, request, onAction), null, config.columns()));
             });
             ((Audience) player).showDialog(dialog);
@@ -76,12 +76,13 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
         }
     }
 
-    private DialogBase base(EnchantDialogRequest request) {
+    private DialogBase base(Player player, EnchantDialogRequest request) {
         List<DialogBody> body = new ArrayList<>();
         ItemStack displayItem = request.displayItem() == null
             ? new ItemStack(request.material())
             : request.displayItem().clone();
         displayItem.setAmount(1);
+        displayItem = DialogIcons.forViewer(player, displayItem);
         body.add(DialogBody.item(
             displayItem,
             null,
@@ -91,7 +92,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             config.itemHeight()
         ));
 
-        Component title = title();
+        Component title = title(player);
         return DialogBase.builder(title)
             .externalTitle(title)
             .canCloseWithEscape(config.canCloseWithEscape())
@@ -110,7 +111,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             for (int level = 1; level <= config.maxLevelColumns(); level++) {
                 actions.add(level <= row.maxLevel()
                     ? levelButton(player, row, level, onAction)
-                    : spacerButton());
+                    : spacerButton(player));
             }
         }
 
@@ -118,8 +119,8 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             "item", safe(request.itemName()),
             "selected", String.valueOf(request.selectedCount())
         );
-        actions.add(button(config.backButton(), placeholders, action(player, onAction, EnchantDialogAction.backToItems())));
-        actions.add(button(config.continueButton(), placeholders, action(player, onAction, EnchantDialogAction.continueOrder())));
+        actions.add(button(player, config.backButton(), placeholders, action(player, onAction, EnchantDialogAction.backToItems())));
+        actions.add(button(player, config.continueButton(), placeholders, action(player, onAction, EnchantDialogAction.continueOrder())));
         return actions;
     }
 
@@ -130,8 +131,8 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             : row.selectedLevel() > 0 ? button.selectedColor() : button.color();
         Map<String, String> placeholders = enchantPlaceholders(row, Math.max(1, row.selectedLevel()), color);
         return ActionButton.create(
-            component(replace(button.label(), placeholders)),
-            tooltip(button.tooltip(), placeholders),
+            component(player, replace(button.label(), placeholders)),
+            tooltip(player, button.tooltip(), placeholders),
             button.width(),
             action(player, onAction, EnchantDialogAction.setLevel(row.enchantmentKey(), row.selectedLevel() > 0 ? 0 : 1))
         );
@@ -142,25 +143,25 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
         String color = row.selectedLevel() == level ? button.selectedColor() : button.color();
         Map<String, String> placeholders = enchantPlaceholders(row, level, color);
         return ActionButton.create(
-            component(replace(button.label(), placeholders)),
-            tooltip(button.tooltip(), placeholders),
+            component(player, replace(button.label(), placeholders)),
+            tooltip(player, button.tooltip(), placeholders),
             button.width(),
             action(player, onAction, EnchantDialogAction.setLevel(row.enchantmentKey(), level))
         );
     }
 
-    private ActionButton spacerButton() {
-        return button(config.spacerButton(), Map.of(), null);
+    private ActionButton spacerButton(Player player) {
+        return button(player, config.spacerButton(), Map.of(), null);
     }
 
-    private ActionButton button(EnchantDialogConfig.Button button, Map<String, String> placeholders, DialogAction action) {
+    private ActionButton button(Player player, EnchantDialogConfig.Button button, Map<String, String> placeholders, DialogAction action) {
         String label = replace(button.label(), placeholders);
         if (button.icon() != null && !button.icon().isBlank()) {
             label = DialogIcons.withIcon(label, button.icon());
         }
         return ActionButton.create(
-            component(label),
-            tooltip(button.tooltip(), placeholders),
+            component(player, label),
+            tooltip(player, button.tooltip(), placeholders),
             button.width(),
             action
         );
@@ -185,23 +186,23 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
         });
     }
 
-    private Component title() {
+    private Component title(Player player) {
         String title = config.title();
         if (config.titleIcon() != null && !config.titleIcon().isBlank()) {
             title = DialogIcons.withIcon(title, config.titleIcon());
         }
-        return component(title);
+        return component(player, title);
     }
 
-    private Component component(String text) {
-        return DialogIcons.inlineTokens(LEGACY.deserialize(FoText.color(safe(text))));
+    private Component component(Player player, String text) {
+        return DialogIcons.inlineTokens(player, LEGACY.deserialize(FoText.color(safe(text))));
     }
 
-    private Component tooltip(String rawTooltip, Map<String, String> placeholders) {
+    private Component tooltip(Player player, String rawTooltip, Map<String, String> placeholders) {
         if (rawTooltip == null || rawTooltip.isBlank()) {
             return null;
         }
-        return component(replace(rawTooltip, placeholders));
+        return component(player, replace(rawTooltip, placeholders));
     }
 
     private Map<String, String> enchantPlaceholders(EnchantDialogRow row, int level, String color) {

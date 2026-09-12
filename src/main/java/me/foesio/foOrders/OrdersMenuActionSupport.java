@@ -357,8 +357,7 @@ final class OrdersMenuActionSupport {
         List<Integer> orderSlots = manager.guis().slots("layout.main.order-slots", MAIN_ORDER_SLOTS, inventorySize);
 
         if (rawSlot == sortSlot) {
-            playerData.setSortIndex((playerData.getSortIndex() + 1) % SORT_OPTIONS.size());
-            playerDataStore.save(playerId);
+            viewState.mainSortIndex = (viewState.mainSortIndex + 1) % SORT_OPTIONS.size();
             manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND, 0.04f);
             viewState.page = 1;
             refreshMainMenuDebounced(player);
@@ -366,8 +365,7 @@ final class OrdersMenuActionSupport {
         }
 
         if (rawSlot == filterSlot) {
-            playerData.setFilterIndex((playerData.getFilterIndex() + 1) % FILTER_OPTIONS.size());
-            playerDataStore.save(playerId);
+            viewState.mainFilterIndex = (viewState.mainFilterIndex + 1) % FILTER_OPTIONS.size();
             manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND, 0.04f);
             viewState.page = 1;
             refreshMainMenuDebounced(player);

@@ -33,6 +33,8 @@ enum MenuType {
 
 final class MenuViewState {
     int page = 1;
+    int mainSortIndex;
+    int mainFilterIndex;
     String search = "";
     List<MainOrderView> visibleMainOrders;
     int manageOrderIndex = -1;

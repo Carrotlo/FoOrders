@@ -142,18 +142,18 @@ public final class PluginMessages {
         File messagesFile = new File(plugin.getDataFolder(), FILE_NAME);
         return store.runToVersion(version, () -> {
             boolean changed = false;
-            changed |= FoMessageService.addMissingToken(messages, "prefix", ":chest:", null);
-            changed |= FoMessageService.addMissingToken(messages, "admin.usage", ":paper:");
-            changed |= FoMessageService.addMissingToken(messages, "admin.economy-missing", ":redstone:");
-            changed |= FoMessageService.addMissingToken(messages, "admin.reload-success", ":emerald:");
-            changed |= FoMessageService.addMissingToken(messages, "admin.reload-failed", ":redstone:");
-            changed |= FoMessageService.addMissingToken(messages, "custom-items.hold-template", ":paper:");
-            changed |= FoMessageService.addMissingToken(messages, "custom-items.saved", ":emerald:");
-            changed |= FoMessageService.addMissingToken(messages, "custom-items.removed", ":lava_bucket:");
-            changed |= FoMessageService.addMissingToken(messages, "orders.delivered", ":emerald:");
-            changed |= FoMessageService.addMissingToken(messages, "orders.cancelled", ":redstone:");
-            changed |= FoMessageService.addMissingToken(messages, "orders.refunded", ":gold_ingot:");
-            changed |= FoMessageService.addMissingToken(messages, "orders.created-broadcast", ":paper:");
+            changed |= addSpriteIfMissing("prefix", ":chest_minecart:", null);
+            changed |= addSpriteIfMissing("admin.usage", ":paper:");
+            changed |= addSpriteIfMissing("admin.economy-missing", ":redstone:");
+            changed |= addSpriteIfMissing("admin.reload-success", ":emerald:");
+            changed |= addSpriteIfMissing("admin.reload-failed", ":redstone:");
+            changed |= addSpriteIfMissing("custom-items.hold-template", ":paper:");
+            changed |= addSpriteIfMissing("custom-items.saved", ":emerald:");
+            changed |= addSpriteIfMissing("custom-items.removed", ":lava_bucket:");
+            changed |= addSpriteIfMissing("orders.delivered", ":emerald:");
+            changed |= addSpriteIfMissing("orders.cancelled", ":redstone:");
+            changed |= addSpriteIfMissing("orders.refunded", ":gold_ingot:");
+            changed |= addSpriteIfMissing("orders.created-broadcast", ":paper:");
             if (!changed) {
                 return true;
             }
@@ -165,6 +165,18 @@ public final class PluginMessages {
                 return false;
             }
         });
+    }
+
+    private boolean addSpriteIfMissing(String path, String token) {
+        return addSpriteIfMissing(path, token, "{prefix}");
+    }
+
+    private boolean addSpriteIfMissing(String path, String token, String anchor) {
+        String current = messages.getString(path, "");
+        if (DialogIcons.containsToken(current)) {
+            return false;
+        }
+        return FoMessageService.addMissingToken(messages, path, token, anchor);
     }
 
     public boolean migratePrefix(FoMigrationStore store, int version) {

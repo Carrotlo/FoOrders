@@ -135,12 +135,7 @@ final class OrdersMenuViewSupport {
     }
 
     private void openMenu(Player player, Inventory menu, String transitionSound) {
-        for (int slot = 0; slot < menu.getSize(); slot++) {
-            ItemStack item = menu.getItem(slot);
-            if (item != null) {
-                menu.setItem(slot, manager.itemSupport.renderForViewer(player, item));
-            }
-        }
+        renderMenuContentsForViewer(player, menu);
         if (hasScreenChanged(player, menu)) {
             if (transitionSound != null && !transitionSound.isBlank()) {
                 manager.playSound(player, transitionSound);
@@ -151,6 +146,20 @@ final class OrdersMenuViewSupport {
             }
         }
         manager.itemSupport.openMenu(player, menu);
+    }
+
+    /**
+     * Re-render fresh menu templates immediately before a player sees them.
+     * In-place refreshes need the same pass as newly opened menus: templates
+     * intentionally retain sprite tokens until the actual viewer is known.
+     */
+    private void renderMenuContentsForViewer(Player player, Inventory menu) {
+        for (int slot = 0; slot < menu.getSize(); slot++) {
+            ItemStack item = menu.getItem(slot);
+            if (item != null) {
+                menu.setItem(slot, manager.itemSupport.renderForViewer(player, item));
+            }
+        }
     }
 
     private boolean hasScreenChanged(Player player, Inventory menu) {
@@ -389,6 +398,8 @@ final class OrdersMenuViewSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         prepareMainMenuState(viewState);
+        viewState.mainSortIndex = 0;
+        viewState.mainFilterIndex = 0;
 
         if (searchText != null) {
             viewState.search = searchText.trim();
@@ -468,8 +479,8 @@ final class OrdersMenuViewSupport {
             menu.setItem(mainNextSlot, manager.guiButtons("main").nextPage(player, viewState.page - 1, pageCount - 1));
         }
 
-        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main-sort-options", SORT_OPTIONS), playerData.getSortIndex(), ACCENT, WHITE));
-        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), playerData.getFilterIndex(), ACCENT, WHITE));
+        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main-sort-options", SORT_OPTIONS), viewState.mainSortIndex, ACCENT, WHITE));
+        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), viewState.mainFilterIndex, ACCENT, WHITE));
         menu.setItem(refreshSlot, createGuiItem("main.refresh", Material.MAP, ACCENT + "ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to refresh")));
         menu.setItem(searchSlot, createSearchGuiItem("main", player, viewState.search));
         menu.setItem(yourOrdersSlot, createGuiItem("main.your-orders", Material.BOOK, ACCENT + "ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to view your Orders")));
@@ -1563,6 +1574,7 @@ final class OrdersMenuViewSupport {
         }
 
         populateMainMenuContents(player, topInventory, viewState, playerData, orderSlots, visibleOrders, pageCount);
+        renderMenuContentsForViewer(player, topInventory);
         player.updateInventory();
         return true;
     }
@@ -1583,7 +1595,7 @@ final class OrdersMenuViewSupport {
             }
             Material orderMaterial = resolveMaterial(order.getMaterial());
 
-            if (!matchesItemFilter(orderMaterial, playerData.getFilterIndex())) {
+            if (!matchesItemFilter(orderMaterial, viewState.mainFilterIndex)) {
                 continue;
             }
 
@@ -1600,7 +1612,7 @@ final class OrdersMenuViewSupport {
             visibleOrders.add(new MainOrderView(ownerId, ownerName, order));
         }
 
-        visibleOrders.sort((left, right) -> compareByMainSort(left.order(), right.order(), playerData.getSortIndex()));
+        visibleOrders.sort((left, right) -> compareByMainSort(left.order(), right.order(), viewState.mainSortIndex));
         return visibleOrders;
     }
 

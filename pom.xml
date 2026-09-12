@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>me.foesio</groupId>
     <artifactId>FoOrders</artifactId>
-    <version>4.3</version>
+    <version>4.4</version>
     <packaging>jar</packaging>
     <name>FoOrders</name>
     <properties>
@@ -77,7 +77,7 @@
         <dependency>
             <groupId>me.foesio</groupId>
             <artifactId>fo-plugin-core</artifactId>
-            <version>1.1</version>
+            <version>1.4</version>
         </dependency>
         <dependency>
             <groupId>io.papermc.paper</groupId>

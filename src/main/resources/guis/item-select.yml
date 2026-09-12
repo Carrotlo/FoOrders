@@ -19,7 +19,7 @@ labels:
 buttons:
   back:
     material: IRON_DOOR
-    name: "{theme}&lBACK"
+    name: ":iron_door: {theme}&lBACK"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -49,7 +49,7 @@ buttons:
       - "{good}→ Click to Next Page ←"
   search:
     material: NAME_TAG
-    name: "{theme}&lSEARCH"
+    name: ":name_tag: {theme}&lSEARCH"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "

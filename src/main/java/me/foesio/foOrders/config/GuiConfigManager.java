@@ -36,6 +36,7 @@ public final class GuiConfigManager {
     // Reserve a plugin-level version above the existing message migrations so
     // later config migrations cannot accidentally skip this split.
     private static final int GUI_SPLIT_MIGRATION_VERSION = 10;
+    private static final int GUI_BUTTON_SPRITE_MIGRATION_VERSION = 11;
     private static final Map<String, String> PUBLIC_GUI_FILES = Map.ofEntries(
         Map.entry("main", "guis/main.yml"),
         Map.entry("your-orders", "guis/your-orders.yml"),
@@ -99,6 +100,7 @@ public final class GuiConfigManager {
         warnedMessages.clear();
         clearCaches();
         migrations.runToVersion(GUI_SPLIT_MIGRATION_VERSION, this::migrateLegacyAggregate);
+        migrations.runToVersion(GUI_BUTTON_SPRITE_MIGRATION_VERSION, this::migrateDefaultBackAndSearchSprites);
 
         YamlConfiguration loaded = new YamlConfiguration();
         Map<String, GuiButtonConfig> loadedButtons = new LinkedHashMap<>();
@@ -557,6 +559,37 @@ public final class GuiConfigManager {
             changed = true;
         }
         return changed;
+    }
+
+    /**
+     * Adds the two standard navigation sprites to untouched public-GUI labels
+     * without replacing server-owner wording or re-adding a later removal.
+     */
+    private boolean migrateDefaultBackAndSearchSprites() {
+        for (String resourcePath : PUBLIC_GUI_FILES.values()) {
+            File targetFile = new File(plugin.getDataFolder(), resourcePath);
+            if (!targetFile.isFile()) {
+                continue;
+            }
+
+            YamlConfiguration loaded = YamlConfiguration.loadConfiguration(targetFile);
+            YamlConfiguration defaults = bundledDefaults(resourcePath);
+            boolean changed = replaceExactDefault(loaded, defaults, "buttons.back.name",
+                "{theme}&lBACK");
+            changed |= replaceExactDefault(loaded, defaults, "buttons.search.name",
+                "{theme}&lSEARCH");
+            if (!changed) {
+                continue;
+            }
+
+            try {
+                loaded.save(targetFile);
+            } catch (IOException exception) {
+                warn("Could not migrate default button sprites in " + resourcePath + ".");
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean migrateDefaultButtonStyles(YamlConfiguration loaded, YamlConfiguration defaults) {
