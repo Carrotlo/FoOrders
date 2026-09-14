@@ -30,6 +30,13 @@ public interface FoOrdersOrderFillApi {
     int apiVersion();
 
     /**
+     * A counter that changes whenever any order might have. A caller that caches
+     * quotes - a sell shop pricing every item in a player's inventory, say - can
+     * hold them until this number moves instead of re-asking per item.
+     */
+    long openOrderRevision();
+
+    /**
      * Every open order {@code sample} could be delivered into, best paying
      * first, without changing anything.
      *

@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class PlayerDataStore {
     private static final int SORT_OPTION_COUNT = 4;
@@ -54,6 +55,7 @@ public final class PlayerDataStore {
     private final Map<UUID, PlayerData> allPlayerDataSnapshot = new ConcurrentHashMap<>();
     private final Map<UUID, Object> playerLocks = new ConcurrentHashMap<>();
     private final WriteBehindStore<UUID, PlayerData> writeBehind;
+    private final AtomicLong ordersRevision = new AtomicLong();
 
     public PlayerDataStore(Plugin plugin, FoScheduler scheduler) {
         this.plugin = plugin;
@@ -115,6 +117,7 @@ public final class PlayerDataStore {
     }
 
     public void saveAndUnload(UUID playerId) {
+        ordersRevision.incrementAndGet();
         writeBehind.snapshotAndWriteAsync(playerId, true);
     }
 
@@ -130,6 +133,15 @@ public final class PlayerDataStore {
      * {@link PlayerData} wholesale first, as this used to, deep copied all of a
      * player's data just to read their orders and then copied every order again.
      */
+    /**
+     * Bumped whenever any player's data is written back, so a reader that
+     * caches order state can tell in O(1) whether its cache is still good
+     * instead of taking a full snapshot to find out.
+     */
+    public long ordersRevision() {
+        return ordersRevision.get();
+    }
+
     public List<PlayerOrderRecord> getAllOrdersSnapshot() {
         List<PlayerOrderRecord> orders = new ArrayList<>();
         Set<UUID> cachedPlayers = new HashSet<>();
@@ -157,6 +169,7 @@ public final class PlayerDataStore {
     }
 
     private void markDirty(UUID playerId, boolean urgent) {
+        ordersRevision.incrementAndGet();
         PlayerData snapshot = null;
         synchronized (playerLock(playerId)) {
             PlayerData data = cache.get(playerId);

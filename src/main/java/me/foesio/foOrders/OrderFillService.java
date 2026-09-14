@@ -38,6 +38,11 @@ final class OrderFillService implements FoOrdersOrderFillApi {
     }
 
     @Override
+    public long openOrderRevision() {
+        return manager.playerDataStore.ordersRevision();
+    }
+
+    @Override
     public double[] openOrderQuotes(Player seller, ItemStack sample, double minPricePerItem, boolean includeOwnOrders) {
         List<Candidate> candidates = findCandidates(seller, sample, minPricePerItem, includeOwnOrders);
         double[] quotes = new double[1 + candidates.size() * 2];
