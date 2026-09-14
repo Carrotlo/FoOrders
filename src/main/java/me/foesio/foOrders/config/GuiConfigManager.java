@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class GuiConfigManager {
@@ -38,9 +39,23 @@ public final class GuiConfigManager {
         "#ffffffClick to confirm order",
         "#a7b8b0(Total: ${total})"
     );
-    private static final String TAX_DISCLOSURE_LORE = "#a7b8b0Tax ({tax_percent}%): {theme}${tax}";
+    private static final String TAX_DISCLOSURE_LORE = "{muted}Tax ({tax_percent}%): {theme}${tax}";
     private static final String DEFAULT_THEME_COLOR = "#03fc88";
-    private static final Pattern DEFAULT_THEME_COLOR_PATTERN = Pattern.compile("(?i)#03fc88");
+    /**
+     * The hard-coded colours older GUI files shipped with, and the colour token
+     * that replaces each one. Rewriting them on load means a server that edits
+     * a token in messages.yml sees every default menu follow it, instead of
+     * only the entries they happened to retype.
+     */
+    private static final Map<Pattern, String> COLOR_TOKEN_MIGRATIONS = Map.of(
+        Pattern.compile("(?i)#03fc88"), "{theme}",
+        Pattern.compile("(?i)#ffffff"), "{white}",
+        Pattern.compile("(?i)#a7b8b0"), "{muted}",
+        Pattern.compile("(?i)#ff5d73"), "{error}",
+        Pattern.compile("(?i)#3ecf8e"), "{success}"
+    );
+    private static final String DEFAULT_SELECTED_OPTION = "{theme}\u00BB {label}";
+    private static final String DEFAULT_UNSELECTED_OPTION = "{white}\u2022 {label}";
     private static final List<String> REMOVED_GUI_PATHS = List.of(
         "titles.admin-actions",
         "titles.admin-item-editor",
@@ -129,6 +144,15 @@ public final class GuiConfigManager {
     public String text(String path, String fallback, Map<String, String> placeholders) {
         String raw = guis.getString(path, fallback);
         return formatGuiText(raw == null ? fallback : raw, placeholders);
+    }
+
+    /**
+     * A raw list of strings from the GUI file, uncoloured and unsubstituted, for
+     * entries whose length is up to the server rather than fixed by the plugin.
+     * Empty when the path is unset.
+     */
+    public List<String> lines(String path) {
+        return List.copyOf(guis.getStringList(path));
     }
 
     public GuiItem item(String path, Material fallbackMaterial, String fallbackName, List<String> fallbackLore) {
@@ -225,12 +249,45 @@ public final class GuiConfigManager {
 
     private Map<String, String> guiPlaceholders(Map<String, String> placeholders) {
         Map<String, String> merged = new LinkedHashMap<>();
+        // Colour tokens first, so a GUI file can use {muted}, {error} and any
+        // token the server added to messages.yml. The explicit entries below
+        // still win, and a caller's own placeholders win over everything.
+        merged.putAll(colorTokens());
         merged.put("theme", themeColor());
         merged.put("plugin", plugin.getName());
         if (placeholders != null && !placeholders.isEmpty()) {
             merged.putAll(placeholders);
         }
         return merged;
+    }
+
+    private Map<String, String> colorTokens() {
+        if (plugin instanceof FoOrders foOrders) {
+            PluginMessages messages = foOrders.messages();
+            if (messages != null) {
+                return messages.tokens();
+            }
+        }
+        return Map.of();
+    }
+
+    /**
+     * One option line inside a cycling Sort or Filter button, for example
+     * {@code "» Most Paid"}. The marker character and its colour live in the
+     * {@code selectors} section of the GUI file so a server can restyle them.
+     *
+     * @param path     the selector's key under {@code selectors}, e.g. {@code main-sort}
+     * @param selected whether this is the option currently in use
+     * @param label    the option's own text
+     */
+    public String selectorOption(String path, boolean selected, String label) {
+        String key = selected ? "selected" : "unselected";
+        String fallback = selected ? DEFAULT_SELECTED_OPTION : DEFAULT_UNSELECTED_OPTION;
+        String raw = guis.getString("selectors." + path + "." + key, fallback);
+        if (raw == null || raw.isBlank()) {
+            raw = fallback;
+        }
+        return formatGuiText(raw, Map.of("label", label == null ? "" : label));
     }
 
     private String themeColor() {
@@ -405,7 +462,11 @@ public final class GuiConfigManager {
         if (value == null || value.isBlank()) {
             return value == null ? "" : value;
         }
-        return DEFAULT_THEME_COLOR_PATTERN.matcher(value).replaceAll("{theme}");
+        String migrated = value;
+        for (Map.Entry<Pattern, String> migration : COLOR_TOKEN_MIGRATIONS.entrySet()) {
+            migrated = migration.getKey().matcher(migrated).replaceAll(Matcher.quoteReplacement(migration.getValue()));
+        }
+        return migrated;
     }
 
     private boolean migrateLegacyButtonsFile(YamlConfiguration loaded) {

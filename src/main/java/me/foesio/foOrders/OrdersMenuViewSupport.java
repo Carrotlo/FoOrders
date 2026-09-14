@@ -38,7 +38,6 @@ final class OrdersMenuViewSupport {
 
     private final OrdersMenuManager manager;
     private final FoScheduler scheduler;
-    private final DateTimeFormatter historyTimestampFormatter;
     private final Map<UUID, MenuViewState> menuStates;
     private final Map<UUID, PendingDeliveryState> pendingDeliveries;
     private final Set<UUID> waitingDeliveryPlayers;
@@ -53,7 +52,6 @@ final class OrdersMenuViewSupport {
     OrdersMenuViewSupport(OrdersMenuManager manager) {
         this.manager = manager;
         this.scheduler = manager.scheduler;
-        this.historyTimestampFormatter = manager.historyTimestampFormatter;
         this.menuStates = manager.menuStates;
         this.pendingDeliveries = manager.pendingDeliveries;
         this.waitingDeliveryPlayers = manager.waitingDeliveryPlayers;
@@ -171,17 +169,29 @@ final class OrdersMenuViewSupport {
         return createSimpleItem(item.material(), item.name(), item.lore());
     }
 
-    private ItemStack createGuiCyclingItem(String path, Material material, String displayName, List<String> options, int selectedIndex, String accentColor, String defaultColor) {
+    /**
+     * A Sort or Filter button whose lore lists every option with the current one
+     * marked. Both the marker characters and their colours come from the
+     * {@code selectors.<selectorPath>} section of the GUI file.
+     *
+     * @param path         the button's own {@code items.} path, for its material and name
+     * @param selectorPath the {@code selectors.} key styling the option lines
+     */
+    private ItemStack createGuiCyclingItem(
+        String path,
+        String selectorPath,
+        Material material,
+        String displayName,
+        List<String> options,
+        int selectedIndex
+    ) {
         int revision = refreshGuiItemCachesIfNeeded();
-        String configuredSelectedColor = manager.messages().themeColor();
-        String selectedColor = configuredSelectedColor == null || configuredSelectedColor.isBlank() ? accentColor : configuredSelectedColor;
-        CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, material, displayName, options, selectedIndex, selectedColor, defaultColor);
+        CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, selectorPath, material, displayName, options, selectedIndex);
         ItemStack template = cyclingGuiItemTemplates.computeIfAbsent(key, ignored -> {
             GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, List.of());
             List<String> lore = new ArrayList<>();
             for (int i = 0; i < options.size(); i++) {
-                boolean selected = i == selectedIndex;
-                lore.add((selected ? selectedColor + "» " : defaultColor + "• ") + options.get(i));
+                lore.add(manager.guis().selectorOption(selectorPath, i == selectedIndex, options.get(i)));
             }
             return createSimpleItem(item.material(), item.name(), lore);
         });
@@ -210,21 +220,6 @@ final class OrdersMenuViewSupport {
 
     private ItemStack createSearchGuiItem(String searchText) {
         return manager.guiButtons().search(searchText);
-    }
-
-    private ItemStack createCyclingItem(Material material, String name, List<String> options, int selectedIndex) {
-        return manager.itemSupport.createCyclingItem(material, name, options, selectedIndex);
-    }
-
-    private ItemStack createCyclingItem(
-        Material material,
-        String name,
-        List<String> options,
-        int selectedIndex,
-        String accentColor,
-        String defaultColor
-    ) {
-        return manager.itemSupport.createCyclingItem(material, name, options, selectedIndex, accentColor, defaultColor);
     }
 
     private ItemStack createOrderItem(String ownerName, PlayerDataStore.OrderEntry order, boolean showAdminModerationLore) {
@@ -396,8 +391,8 @@ final class OrdersMenuViewSupport {
             menu.setItem(mainNextSlot, manager.guiButtons().nextPage(viewState.page - 1, pageCount - 1));
         }
 
-        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main-sort-options", SORT_OPTIONS), playerData.getSortIndex(), ACCENT, WHITE));
-        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), playerData.getFilterIndex(), ACCENT, WHITE));
+        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", "main-sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main-sort-options", SORT_OPTIONS), playerData.getSortIndex()));
+        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", "main-filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), playerData.getFilterIndex()));
         menu.setItem(refreshSlot, createGuiItem("main.refresh", Material.MAP, ACCENT + "ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to refresh")));
         menu.setItem(searchSlot, createSearchGuiItem(viewState.search));
         menu.setItem(yourOrdersSlot, createGuiItem("main.your-orders", Material.BOOK, ACCENT + "ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to view your Orders")));
@@ -567,11 +562,11 @@ final class OrdersMenuViewSupport {
 
         menu.setItem(
             sortSlot,
-            createGuiCyclingItem("item-select.sort", Material.CAULDRON, LIGHT_ACCENT + "ꜱᴏʀᴛ", guiLabels("item-sort-options", ITEM_SORT_OPTIONS), itemSelectState.sortIndex, LIGHT_ACCENT, WHITE)
+            createGuiCyclingItem("item-select.sort", "item-sort", Material.CAULDRON, LIGHT_ACCENT + "ꜱᴏʀᴛ", guiLabels("item-sort-options", ITEM_SORT_OPTIONS), itemSelectState.sortIndex)
         );
         menu.setItem(
             filterSlot,
-            createGuiCyclingItem("item-select.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), itemSelectState.filterIndex, ACCENT, WHITE)
+            createGuiCyclingItem("item-select.filter", "item-filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), itemSelectState.filterIndex)
         );
         menu.setItem(searchSlot, createSearchGuiItem(itemSelectState.search));
 
@@ -1288,30 +1283,27 @@ final class OrdersMenuViewSupport {
                 )
             )
         );
+        boolean orderTabActive = activeType == HistoryDataStore.HistoryType.ORDER;
+        // Active and inactive tabs are separate config entries rather than one
+        // entry recoloured in code, so a server can give them different
+        // materials, names and lore.
         menu.setItem(
             orderTabSlot,
             createGuiItem(
-                "history.order-tab",
-                activeType == HistoryDataStore.HistoryType.ORDER ? Material.WRITABLE_BOOK : Material.BOOK,
-                (activeType == HistoryDataStore.HistoryType.ORDER ? CONFIRM_GREEN : ACCENT) + "ᴏʀᴅᴇʀ ʜɪꜱᴛᴏʀʏ",
-                List.of(
-                    activeType == HistoryDataStore.HistoryType.ORDER
-                        ? MUTED + "Current tab"
-                        : WHITE + "Click to switch"
-                )
+                orderTabActive ? "history.order-tab-active" : "history.order-tab",
+                orderTabActive ? Material.WRITABLE_BOOK : Material.BOOK,
+                (orderTabActive ? CONFIRM_GREEN : ACCENT) + "ᴏʀᴅᴇʀ ʜɪꜱᴛᴏʀʏ",
+                List.of(orderTabActive ? MUTED + "Current tab" : WHITE + "Click to switch")
             )
         );
+        boolean deliverTabActive = activeType == HistoryDataStore.HistoryType.DELIVER;
         menu.setItem(
             deliverTabSlot,
             createGuiItem(
-                "history.deliver-tab",
-                activeType == HistoryDataStore.HistoryType.DELIVER ? Material.MINECART : Material.CHEST_MINECART,
-                (activeType == HistoryDataStore.HistoryType.DELIVER ? CONFIRM_GREEN : ACCENT) + "ᴅᴇʟɪᴠᴇʀ ʜɪꜱᴛᴏʀʏ",
-                List.of(
-                    activeType == HistoryDataStore.HistoryType.DELIVER
-                        ? MUTED + "Current tab"
-                        : WHITE + "Click to switch"
-                )
+                deliverTabActive ? "history.deliver-tab-active" : "history.deliver-tab",
+                deliverTabActive ? Material.MINECART : Material.CHEST_MINECART,
+                (deliverTabActive ? CONFIRM_GREEN : ACCENT) + "ᴅᴇʟɪᴠᴇʀ ʜɪꜱᴛᴏʀʏ",
+                List.of(deliverTabActive ? MUTED + "Current tab" : WHITE + "Click to switch")
             )
         );
         menu.setItem(
@@ -1331,7 +1323,7 @@ final class OrdersMenuViewSupport {
     ItemStack createHistoryEntryItem(HistoryDataStore.HistoryType historyType, HistoryDataStore.HistoryEntry entry, String targetName) {
         Material icon = historyType == HistoryDataStore.HistoryType.ORDER ? Material.WRITABLE_BOOK : Material.CHEST_MINECART;
         String timestamp = entry.timestamp() > 0L
-            ? historyTimestampFormatter.format(Instant.ofEpochMilli(entry.timestamp()))
+            ? manager.historyTimestampFormatter.format(Instant.ofEpochMilli(entry.timestamp()))
             : "Unknown";
         return createGuiItem(
             "history.entry",
@@ -1575,12 +1567,11 @@ final class OrdersMenuViewSupport {
     private record CyclingGuiItemKey(
         int revision,
         String path,
+        String selectorPath,
         Material material,
         String displayName,
         List<String> options,
-        int selectedIndex,
-        String accentColor,
-        String defaultColor
+        int selectedIndex
     ) {
         private CyclingGuiItemKey {
             options = copyStringList(options);

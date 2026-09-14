@@ -50,6 +50,10 @@ history:
   admins-can-view-any: true
   # Maximum stored entries per history type (order/deliver) for each player.
   max-entries-per-type: 100
+  # How the time on each history entry is written, in Java date/time pattern
+  # syntax. Uses the server's own time zone. Examples: "dd/MM/yyyy HH:mm",
+  # "MMM d, h:mm a", "HH:mm".
+  timestamp-format: "yyyy-MM-dd HH:mm"
 
 discord-webhook:
   # Master switch for all webhook messages.
