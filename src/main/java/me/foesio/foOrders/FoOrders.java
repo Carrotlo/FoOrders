@@ -10,6 +10,7 @@ import me.foesio.core.reload.FoReloadRegistry;
 import me.foesio.core.reload.FoReloadResult;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.core.update.UpdateNoticeService;
+import me.foesio.foOrders.api.FoOrdersOrderFillApi;
 import me.foesio.foOrders.command.OrderAdminCommand;
 import me.foesio.foOrders.command.OrderCommand;
 import me.foesio.foOrders.config.GuiConfigManager;
@@ -25,6 +26,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.RegisteredServiceProvider;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.LinkedHashMap;
@@ -107,6 +109,13 @@ public final class FoOrders extends JavaPlugin {
         registerCommand("order", orderCommand);
         registerCommand("orderadmin", orderAdminCommand);
 
+        getServer().getServicesManager().register(
+            FoOrdersOrderFillApi.class,
+            ordersMenuManager.orderFillApi(),
+            this,
+            ServicePriority.Normal
+        );
+
         ordersMenuManager.initializeOnlinePlayers();
         fileLogger.info("FoOrders enable completed.");
     }
@@ -143,6 +152,7 @@ public final class FoOrders extends JavaPlugin {
         if (dialogInputService != null) {
             dialogInputService.shutdown();
         }
+        getServer().getServicesManager().unregisterAll(this);
         if (core != null) {
             core.close();
         }
@@ -170,6 +180,7 @@ public final class FoOrders extends JavaPlugin {
         changed |= setDefaultIfMissing(config, "order-tax.percentage", 0);
         changed |= setDefaultIfMissing(config, "file-logging", false);
         changed |= setDefaultIfMissing(config, "main-orders-per-page", 0);
+        changed |= setDefaultIfMissing(config, "history.timestamp-format", OrdersMenuManager.DEFAULT_HISTORY_TIMESTAMP_FORMAT);
         changed |= setDefaultIfMissing(config, "block-creative-only-items", true);
         changed |= setDefaultIfMissing(config, "sounds.enabled", true);
         changed |= setDefaultIfMissing(config, NativeDialogConfigDefaults.ENABLED_PATH, true);
@@ -303,6 +314,15 @@ public final class FoOrders extends JavaPlugin {
         if (executor instanceof TabCompleter tabCompleter) {
             command.setTabCompleter(tabCompleter);
         }
+    }
+
+    /**
+     * Lets another plugin deliver items straight into open orders. Callers
+     * without FoOrders on their classpath can reach the same object through
+     * Bukkit's services manager, or reflectively through this method.
+     */
+    public FoOrdersOrderFillApi orderFillApi() {
+        return ordersMenuManager == null ? null : ordersMenuManager.orderFillApi();
     }
 
     public PluginMessages messages() {

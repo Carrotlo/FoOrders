@@ -8,6 +8,7 @@ import me.foesio.core.gui.GuiButtonConfig;
 import me.foesio.core.logging.FoFileLogger;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.integration.DiscordWebhookNotifier;
+import me.foesio.foOrders.api.FoOrdersOrderFillApi;
 import me.foesio.foOrders.config.GuiConfigManager;
 import me.foesio.foOrders.config.GuiSounds;
 import me.foesio.foOrders.dialog.FoOrdersDialogInputService;
@@ -90,6 +91,7 @@ public final class OrdersMenuManager implements Listener {
     static final int MIN_PLAYER_ORDERS = 1;
     static final int MAX_PLAYER_ORDERS_CAP = 26;
     static final long DEFAULT_ORDER_MENU_REFRESH_COOLDOWN_MILLIS = 50L;
+    static final String DEFAULT_HISTORY_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm";
     // Long enough to coalesce a burst of sort or filter clicks, short enough
     // that a single click still feels immediate.
     static final long MAIN_OPTION_REFRESH_DEBOUNCE_TICKS = 2L;
@@ -205,9 +207,10 @@ public final class OrdersMenuManager implements Listener {
     final DialogService dialogService;
     OrdersMenuViewSupport viewSupport;
     OrdersMenuInteractionSupport interactionSupport;
+    final OrderFillService orderFillService;
     volatile FoOrdersDialogInputService dialogInputService;
     volatile FoOrdersItemSelectionDialogService itemSelectionDialogService;
-    final DateTimeFormatter historyTimestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
+    volatile DateTimeFormatter historyTimestampFormatter = defaultHistoryTimestampFormatter();
     final Map<UUID, MenuViewState> menuStates = new ConcurrentHashMap<>();
     final Map<UUID, Long> orderMenuRefreshNanos = new ConcurrentHashMap<>();
     final Map<UUID, Integer> pendingMainMenuRefreshIds = new ConcurrentHashMap<>();
@@ -264,10 +267,15 @@ public final class OrdersMenuManager implements Listener {
         this.itemSupport = new OrdersMenuItemSupport(this);
         this.viewSupport = new OrdersMenuViewSupport(this);
         this.interactionSupport = new OrdersMenuInteractionSupport(this);
+        this.orderFillService = new OrderFillService(this);
     }
 
     public PluginMessages messages() {
         return messages;
+    }
+
+    public FoOrdersOrderFillApi orderFillApi() {
+        return orderFillService;
     }
 
     FoOrdersDialogInputService dialogInputService() {
@@ -442,6 +450,24 @@ public final class OrdersMenuManager implements Listener {
         }
     }
 
+    private static DateTimeFormatter defaultHistoryTimestampFormatter() {
+        return DateTimeFormatter.ofPattern(DEFAULT_HISTORY_TIMESTAMP_FORMAT).withZone(ZoneId.systemDefault());
+    }
+
+    private DateTimeFormatter resolveHistoryTimestampFormatter() {
+        String pattern = plugin.getConfig().getString("history.timestamp-format", DEFAULT_HISTORY_TIMESTAMP_FORMAT);
+        if (pattern == null || pattern.isBlank()) {
+            return defaultHistoryTimestampFormatter();
+        }
+        try {
+            return DateTimeFormatter.ofPattern(pattern).withZone(ZoneId.systemDefault());
+        } catch (IllegalArgumentException exception) {
+            warn("Invalid history.timestamp-format '" + pattern + "': " + exception.getMessage()
+                + ". Using " + DEFAULT_HISTORY_TIMESTAMP_FORMAT + ".");
+            return defaultHistoryTimestampFormatter();
+        }
+    }
+
     public void reloadFromConfig() {
         fileLogger.info("Runtime config reload started.");
         int configured = plugin.getConfig().getInt("max-order-per-player", 3);
@@ -467,6 +493,7 @@ public final class OrdersMenuManager implements Listener {
             warn("order-tax.percentage is out of range; using " + orderTaxPercentage + " (allowed 0-100).");
         }
         historyEnabled = plugin.getConfig().getBoolean("history.enabled", true);
+        historyTimestampFormatter = resolveHistoryTimestampFormatter();
         historyPlayersCanViewOwn = plugin.getConfig().getBoolean("history.players-can-view-own", true);
         historyAdminsCanViewAny = plugin.getConfig().getBoolean("history.admins-can-view-any", true);
         itemSelectionDialogsEnabled = plugin.getConfig().getBoolean("native-dialogs.item-selection", true);

@@ -1,5 +1,6 @@
 # Editable GUI text and button materials for FoOrders inventory menus.
-# Use {theme}, #RRGGBB, or & color codes. Dynamic placeholders are listed beside each item where supported.
+# Use the colour tokens from messages.yml ({theme}, {white}, {muted}, {error},
+# {success}, and any you add there), #RRGGBB hex, or & color codes. Dynamic placeholders are listed beside each item where supported.
 # Slot numbers are 0-based Minecraft inventory slots.
 titles:
   main: "&8ᴏʀᴅᴇʀꜱ (Page {page})"
@@ -32,6 +33,24 @@ labels:
     - "Books"
     - "Ingredients"
     - "Utilities"
+
+# How each option is drawn inside a cycling Sort or Filter button. {label} is
+# the option's own text from the labels section above, so both the marker
+# character and its colour are yours to change - swap the arrows for ">", "▶"
+# or "✔", or drop them entirely and just colour the whole line.
+selectors:
+  main-sort:
+    selected: "{theme}» {label}"
+    unselected: "{white}• {label}"
+  main-filter:
+    selected: "{theme}» {label}"
+    unselected: "{white}• {label}"
+  item-sort:
+    selected: "{theme}» {label}"
+    unselected: "{white}• {label}"
+  item-filter:
+    selected: "{theme}» {label}"
+    unselected: "{white}• {label}"
 
 layout:
   main:
@@ -67,23 +86,23 @@ buttons:
     material: IRON_DOOR
     name: "{theme}ʙᴀᴄᴋ"
     lore:
-      - "#ffffffClick to return"
+      - "{white}Click to return"
   previous-page:
     material: ARROW
     name: "{theme}ᴘʀᴇᴠɪᴏᴜꜱ ᴘᴀɢᴇ"
     lore:
-      - "#ffffffPage {page}/{max_page}"
+      - "{white}Page {page}/{max_page}"
   next-page:
     material: ARROW
     name: "{theme}ɴᴇxᴛ ᴘᴀɢᴇ"
     lore:
-      - "#ffffffPage {page}/{max_page}"
+      - "{white}Page {page}/{max_page}"
   search:
     material: NAME_TAG
     name: "{theme}ꜱᴇᴀʀᴄʜ"
     lore:
-      - "#ffffffCurrent: {current}"
-      - "#ffffffClick to search"
+      - "{white}Current: {current}"
+      - "{white}Click to search"
 
 items:
   # Shared back/page/search button appearance is controlled by the buttons section above.
@@ -106,13 +125,13 @@ items:
       name: "{theme}{owner}'s Order"
       lore:
         # Amount line for the ordered item.
-        amount: "{theme}{amount} #ffffff{item}"
+        amount: "{theme}{amount} {white}{item}"
         # Per-item price line. Change "each" here if you want different wording.
-        price: "{theme}${price} #ffffffeach"
+        price: "{theme}${price} {white}each"
         # Delivered progress line.
-        delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
+        delivered: "{progress}{delivered}/{progress-done}{amount} {progress-label}Delivered"
         # Paid progress line.
-        paid: "#a7b8b0${paid}/#3ecf8e${total} #a7b8b0Paid"
+        paid: "{progress}${paid}/{progress-done}${total} {progress-label}Paid"
     previous-page:
       slot: 45
     next-page:
@@ -130,7 +149,7 @@ items:
       material: MAP
       name: "{theme}ᴏʀᴅᴇʀꜱ"
       lore:
-        - "#ffffffClick to refresh"
+        - "{white}Click to refresh"
     search:
       slot: 50
     your-orders:
@@ -138,14 +157,14 @@ items:
       material: BOOK
       name: "{theme}ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
       lore:
-        - "#ffffffClick to view your orders"
+        - "{white}Click to view your orders"
     history:
       slot: 52
       material: WRITABLE_BOOK
       name: "{theme}ʜɪꜱᴛᴏʀʏ"
       lore:
-        - "#ffffffClick to view order history"
-        - "#ffffffSwitch between order and deliver tabs"
+        - "{white}Click to view order history"
+        - "{white}Switch between order and deliver tabs"
 
   your-orders:
     new-order:
@@ -153,15 +172,15 @@ items:
       material: MAP
       name: "{theme}New Order"
       lore:
-        - "#ffffffClick to create new order"
+        - "{white}Click to create new order"
 
   new-order:
     cancel:
       slot: 10
       material: RED_STAINED_GLASS_PANE
-      name: "#ff5d73ᴄᴀɴᴄᴇʟ"
+      name: "{error}ᴄᴀɴᴄᴇʟ"
       lore:
-        - "#ffffffClick to return"
+        - "{white}Click to return"
     item:
       slot: 12
       name: "{theme}ɪᴛᴇᴍ"
@@ -170,15 +189,15 @@ items:
       material: CHEST
       name: "{theme}ᴀᴍᴏᴜɴᴛ"
       lore:
-        - "#ffffffClick to type number of items"
-        - "#a7b8b0({amount})"
+        - "{white}Click to type number of items"
+        - "{muted}({amount})"
     price:
       slot: 14
       material: EMERALD
       name: "{theme}ᴘʀɪᴄᴇ"
       lore:
-        - "#ffffffClick to type the price per item"
-        - "#a7b8b0(${price})"
+        - "{white}Click to type the price per item"
+        - "{muted}(${price})"
     enchants:
       slot: 15
       material: ENCHANTED_BOOK
@@ -186,14 +205,35 @@ items:
     confirm:
       slot: 16
       material: LIME_STAINED_GLASS_PANE
-      name: "#3ecf8eᴄᴏɴꜰɪʀᴍ"
+      name: "{success}ᴄᴏɴꜰɪʀᴍ"
       lore:
-        - "#ffffffClick to confirm order"
-        - "#a7b8b0Subtotal: {theme}${subtotal}"
-        - "#a7b8b0Tax ({tax_percent}%): {theme}${tax}"
-        - "#a7b8b0Total: #3ecf8e${total}"
+        - "{white}Click to confirm order"
+        - "{muted}Subtotal: {theme}${subtotal}"
+        - "{muted}Tax ({tax_percent}%): {theme}${tax}"
+        - "{muted}Total: {success}${total}"
 
   item-select:
+    # Every orderable vanilla material in the item picker. The icon is always
+    # the item itself; only its name and lore come from here.
+    # Placeholders: {item}, {material}
+    entry:
+      name: "{theme}{item}"
+      lore:
+        - "{white}Click to Select"
+    # Admin-made custom items in the picker. Their own name and lore come from
+    # the saved template; these lines are appended underneath it.
+    # Placeholders: {item}, {id}, {enchants}
+    custom-entry:
+      name: "{theme}{item}"
+      lore:
+        - ""
+        - "{muted}Custom Item"
+        - "{muted}ID: {id}"
+        - "{white}Order enchants: {enchants}"
+        - "{white}Click to Select"
+      # What {enchants} above becomes for each state.
+      enchants-enabled: "{success}Enabled"
+      enchants-disabled: "{error}Disabled"
     sort:
       slot: 48
       material: CAULDRON
@@ -210,6 +250,39 @@ items:
       slot: 53
 
   enchant-select:
+    # One enchantment in the enchant picker, before any level is chosen.
+    # Placeholders: {enchantment}, {current}, {current_level}, {max}, {max_level}, {item}, {material}
+    entry:
+      material: BOOK
+      name: "{theme}{enchantment}"
+      lore:
+        - "{muted}Current: {current}"
+        - "{muted}Max: {max}"
+        - "{muted}For {item}"
+        - ""
+        - "{white}Left click: +1 level"
+        - "{white}Right click: -1 level"
+        - "{white}Shift + Left: +5 levels"
+        - "{white}Shift + Right: -5 levels"
+      # How {current} and {max} render a level. {roman} is the Roman numeral,
+      # {level} the plain number - drop either if you only want one.
+      level: "{theme}{roman}{white} ({level})"
+      # What {current} shows when no level is picked yet.
+      level-none: "{theme}None"
+    # Same entry once a level is picked. Give it a different material or colour
+    # to make the chosen enchantments stand out.
+    entry-selected:
+      material: ENCHANTED_BOOK
+      name: "{theme}{enchantment}"
+      lore:
+        - "{muted}Current: {current}"
+        - "{muted}Max: {max}"
+        - "{muted}For {item}"
+        - ""
+        - "{white}Left click: +1 level"
+        - "{white}Right click: -1 level"
+        - "{white}Shift + Left: +5 levels"
+        - "{white}Shift + Right: -5 levels"
     previous-page:
       slot: 45
     next-page:
@@ -217,37 +290,42 @@ items:
     clear:
       slot: 48
       material: RED_TERRACOTTA
-      name: "#ff5d73ᴄʟᴇᴀʀ"
+      name: "{error}ᴄʟᴇᴀʀ"
       lore:
-        - "#ffffffClick to remove all selected enchantments"
+        - "{white}Click to remove all selected enchantments"
     done:
       slot: 49
       material: LIME_STAINED_GLASS_PANE
-      name: "#3ecf8eᴅᴏɴᴇ"
+      name: "{success}ᴅᴏɴᴇ"
       lore:
-        - "#ffffffClick to return"
-        - "#a7b8b0({selected} selected)"
+        - "{white}Click to return"
+        - "{muted}({selected} selected)"
     controls:
       slot: 50
       material: OAK_SIGN
       name: "{theme}ᴄᴏɴᴛʀᴏʟꜱ"
       lore:
-        - "#ffffffLeft click: +1 level"
-        - "#ffffffRight click: -1 level"
-        - "#ffffffShift + Left: +5 levels"
-        - "#ffffffShift + Right: -5 levels"
+        - "{white}Left click: +1 level"
+        - "{white}Right click: -1 level"
+        - "{white}Shift + Left: +5 levels"
+        - "{white}Shift + Right: -5 levels"
 
   manage-order:
     cancel:
       slot: 11
       material: RED_TERRACOTTA
-      name: "#ff5d73ᴄᴀɴᴄᴇʟ"
+      name: "{error}ᴄᴀɴᴄᴇʟ"
       lore:
-        - "#ffffffClick to cancel your order"
+        - "{white}Click to cancel your order"
     claim:
       slot: 14
       material: CHEST
-      name: "#3ecf8eᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
+      name: "{success}ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
+      # The claim button lists the stacks waiting to be collected, at most five
+      # lines. Placeholders: {amount}, {item}
+      stack-line: "{muted}- {amount}x {item}"
+      # Shown instead of the last stack line when there are more than fit.
+      more-line: "{muted}And {amount} more"
 
   claim-order:
     previous-page:
@@ -257,23 +335,23 @@ items:
     drop-page:
       slot: 52
       material: DISPENSER
-      name: "#a7b8b0ᴅʀᴏᴘ ᴘᴀɢᴇ"
+      name: "{muted}ᴅʀᴏᴘ ᴘᴀɢᴇ"
       lore:
-        - "#ffffffDrop all items on the page"
+        - "{white}Drop all items on the page"
 
   delivery-confirm:
     cancel:
       slot: 11
       material: RED_STAINED_GLASS_PANE
-      name: "#ff5d73ᴄᴀɴᴄᴇʟ"
+      name: "{error}ᴄᴀɴᴄᴇʟ"
       lore:
-        - "#ffffffClick to return"
+        - "{white}Click to return"
     confirm:
       slot: 15
       material: LIME_STAINED_GLASS_PANE
-      name: "#3ecf8eᴄᴏɴꜰɪʀᴍ"
+      name: "{success}ᴄᴏɴꜰɪʀᴍ"
       lore:
-        - "#ffffffClick to confirm order"
+        - "{white}Click to confirm order"
 
   history:
     info:
@@ -281,13 +359,33 @@ items:
       material: OAK_SIGN
       name: "{theme}ᴠɪᴇᴡɪɴɢ"
       lore:
-        - "#ffffff{target}"
-        - "#a7b8b0Page {page}/{pages}"
-        - "#a7b8b0Entries: {entries}"
+        - "{white}{target}"
+        - "{muted}Page {page}/{pages}"
+        - "{muted}Entries: {entries}"
+    # The two history tabs, each with a separate look for when it is the tab
+    # being viewed and when it is not.
     order-tab:
       slot: 48
+      material: BOOK
+      name: "{theme}ᴏʀᴅᴇʀ ʜɪꜱᴛᴏʀʏ"
+      lore:
+        - "{white}Click to switch"
+    order-tab-active:
+      material: WRITABLE_BOOK
+      name: "{success}ᴏʀᴅᴇʀ ʜɪꜱᴛᴏʀʏ"
+      lore:
+        - "{muted}Current tab"
     deliver-tab:
       slot: 50
+      material: CHEST_MINECART
+      name: "{theme}ᴅᴇʟɪᴠᴇʀ ʜɪꜱᴛᴏʀʏ"
+      lore:
+        - "{white}Click to switch"
+    deliver-tab-active:
+      material: MINECART
+      name: "{success}ᴅᴇʟɪᴠᴇʀ ʜɪꜱᴛᴏʀʏ"
+      lore:
+        - "{muted}Current tab"
     back-to-orders:
       slot: 49
     previous-page:
@@ -297,6 +395,21 @@ items:
     entry:
       name: "{theme}{action}"
       lore:
-        - "#ffffff{details}"
-        - "#a7b8b0Player: {target}"
-        - "#a7b8b0Time: {time}"
+        - "{white}{details}"
+        - "{muted}Player: {target}"
+        - "{muted}Time: {time}"
+
+# Reusable text fragments the menus build names and lore out of.
+formats:
+  # One line of the enchantment list on the New Order enchants button.
+  # Placeholders: {enchantment}, {roman}, {level}
+  enchantment-summary-line: "{muted}- {enchantment} {roman}"
+  # How an enchanted item's name is written, e.g. "Diamond Sword (Sharpness V, +2)".
+  # {name} is the plain item name, {enchants} the joined parts below.
+  enchantment-name: "{name} ({enchants})"
+  # One enchantment inside {enchants}. Placeholders: {enchantment}, {roman}, {level}
+  enchantment-name-part: "{enchantment} {roman}"
+  # What sits between those parts.
+  enchantment-name-separator: ", "
+  # Stands in for the enchantments past the first two. Placeholder: {count}
+  enchantment-name-overflow: "+{count}"

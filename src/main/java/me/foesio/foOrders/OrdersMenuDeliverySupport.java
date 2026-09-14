@@ -1338,12 +1338,22 @@ final class OrdersMenuDeliverySupport {
         int maxLoreLines = 5;
         int maxStackLines = stacks.size() > maxLoreLines ? maxLoreLines - 1 : maxLoreLines;
         for (int i = 0; i < Math.min(stacks.size(), maxStackLines); i++) {
-            lore.add(LIGHT_GRAY + "- " + formatCompactAmount(stacks.get(i)) + "x " + itemName);
+            String stackAmount = formatCompactAmount(stacks.get(i));
+            lore.add(manager.guis().text(
+                "items.manage-order.claim.stack-line",
+                LIGHT_GRAY + "- " + stackAmount + "x " + itemName,
+                PluginMessages.placeholders("amount", stackAmount, "item", itemName)
+            ));
         }
 
         int hiddenStacks = stacks.size() - maxStackLines;
         if (hiddenStacks > 0) {
-            lore.add(LIGHT_GRAY + "And " + formatCompactAmount(hiddenStacks) + " more");
+            String hiddenText = formatCompactAmount(hiddenStacks);
+            lore.add(manager.guis().text(
+                "items.manage-order.claim.more-line",
+                LIGHT_GRAY + "And " + hiddenText + " more",
+                PluginMessages.placeholders("amount", hiddenText, "item", itemName)
+            ));
         }
         return lore;
     }

@@ -1,7 +1,29 @@
 prefix: "{theme}FoOrders &8» #a7b8b0"
 
+# Colour tokens. Every {name} below can be used anywhere in this file, in
+# guis/orders.yml and in the dialogs/ files, so recolouring a token here
+# repaints every menu that uses it. Each value takes #RRGGBB hex, & colour
+# codes, or another {token}. Add your own keys freely - a token named
+# "highlight" is usable as {highlight} straight away.
 tokens:
+  # Main accent: button names, highlighted values, the chat prefix.
   theme: "#03fc88"
+  # Secondary accent. Kept separate so menus that want a different highlight
+  # from the main theme can have one; by default it just follows {theme}.
+  accent: "{theme}"
+  # Body text on buttons: "Click to ...", item names, details.
+  white: "#ffffff"
+  # Quieter text: counters, hints, "(3 selected)" notes, inactive tabs.
+  muted: "#a7b8b0"
+  # Errors, cancel buttons and blocked actions.
+  error: "#ff5d73"
+  # Confirmations, completed progress and money earned.
+  success: "#3ecf8e"
+  # Progress lines such as "12/64 Delivered": the outstanding part, the part
+  # already done, and the trailing label.
+  progress: "#a7b8b0"
+  progress-done: "#3ecf8e"
+  progress-label: "#a7b8b0"
 
 general:
   only-players: "{prefix}Only players can use this command."

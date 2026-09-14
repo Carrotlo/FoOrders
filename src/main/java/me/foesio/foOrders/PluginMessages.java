@@ -30,6 +30,7 @@ public final class PluginMessages {
     private final JavaPlugin plugin;
     private YamlConfiguration messages = new YamlConfiguration();
     private volatile String themeColor = TextFormat.colorize(DEFAULT_THEME_COLOR);
+    private volatile Map<String, String> resolvedTokens = Map.of();
     private volatile int revision = 0;
 
     public PluginMessages(JavaPlugin plugin) {
@@ -67,11 +68,62 @@ public final class PluginMessages {
 
         messages = loadedMessages;
         themeColor = colorize(resolveThemeColor(loadedMessages));
+        resolvedTokens = buildResolvedTokens();
         revision++;
     }
 
     public String themeColor() {
         return themeColor;
+    }
+
+    /**
+     * Every colour token from messages.yml, already resolved against each other
+     * and colourised, so other config files can offer the same {name} tokens.
+     */
+    public Map<String, String> tokens() {
+        Map<String, String> resolved = resolvedTokens;
+        return resolved == null ? Map.of() : resolved;
+    }
+
+    /**
+     * Resolves tokens that refer to other tokens ({@code accent: "{theme}"}) and
+     * colourises the result once, so callers can drop the values straight into
+     * text they render.
+     */
+    private Map<String, String> buildResolvedTokens() {
+        Map<String, String> raw = tokenValues();
+        Map<String, String> resolved = new LinkedHashMap<>(raw);
+        // Two passes is enough for a token pointing at a token pointing at a
+        // colour; a longer chain simply keeps its last unresolved {name}.
+        for (int pass = 0; pass < 2; pass++) {
+            boolean changed = false;
+            for (Map.Entry<String, String> entry : resolved.entrySet()) {
+                String value = entry.getValue();
+                if (value == null || value.indexOf('{') < 0) {
+                    continue;
+                }
+                String replaced = value;
+                for (Map.Entry<String, String> token : raw.entrySet()) {
+                    if (token.getKey().equals(entry.getKey())) {
+                        continue;
+                    }
+                    replaced = replaceToken(replaced, token);
+                }
+                if (!replaced.equals(value)) {
+                    entry.setValue(replaced);
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                break;
+            }
+        }
+
+        Map<String, String> colorized = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : resolved.entrySet()) {
+            colorized.put(entry.getKey(), colorize(entry.getValue()));
+        }
+        return Map.copyOf(colorized);
     }
 
     public int revision() {
