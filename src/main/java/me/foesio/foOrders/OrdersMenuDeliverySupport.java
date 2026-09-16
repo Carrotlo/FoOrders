@@ -10,11 +10,13 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.ShulkerBox;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -1039,6 +1041,11 @@ final class OrdersMenuDeliverySupport {
                 return;
             }
 
+            if (!dropClaimStacks(player, stacksToDrop)) {
+                openClaimOrderMenu(player, false);
+                return;
+            }
+
             for (int index = startIndex; index < endIndex; index++) {
                 claimSessionStacks.set(index, 0);
             }
@@ -1054,7 +1061,6 @@ final class OrdersMenuDeliverySupport {
                 "Claimed " + formatCompactAmount(droppedAmount) + "x " + formatOrderDisplayName(selectedOrder) + " (Drop Page)"
             );
             sendOrderClaimedWebhook(player, selectedOrder, droppedAmount, "Drop Page");
-            dropClaimStacksWithDelay(player, stacksToDrop);
             if (!removed && viewState.manageOrderIndex >= 0) {
                 openClaimOrderMenu(player, false);
             } else {
@@ -1306,23 +1312,38 @@ final class OrdersMenuDeliverySupport {
         }
     }
 
-    void dropClaimStacksWithDelay(Player player, List<ItemStack> stacksToDrop) {
-        if (stacksToDrop.isEmpty()) {
-            return;
+    /**
+     * Throws the claimed stacks out in front of the player, and reports whether
+     * they made it into the world.
+     *
+     * <p>Every stack is dropped now, on the thread already holding the player,
+     * rather than one per tick as this used to do. The first stack was
+     * scheduled with a zero tick delay, which Folia refuses outright - and the
+     * scheduler reports that refusal by logging rather than throwing, so the
+     * stack was silently never dropped even though the claim had already given
+     * it up. A claim small enough to fit in a single stack was entirely that
+     * first stack, which is why claiming under a stack lost the lot.
+     */
+    boolean dropClaimStacks(Player player, List<ItemStack> stacksToDrop) {
+        if (stacksToDrop.isEmpty() || !player.isOnline()) {
+            return false;
         }
 
+        Vector direction = player.getEyeLocation().getDirection().normalize();
+        Location spawnLocation = player.getEyeLocation().clone().add(direction.clone().multiply(0.4));
+        // Perpendicular to the way the player is facing, so the stacks fan out
+        // left and right instead of landing on one spot - what spreading them
+        // over several ticks used to achieve.
+        Vector sideways = new Vector(-direction.getZ(), 0, direction.getX());
+
         for (int i = 0; i < stacksToDrop.size(); i++) {
-            ItemStack stack = stacksToDrop.get(i).clone();
-            scheduler.runLaterForPlayer(player, () -> {
-                if (!player.isOnline()) {
-                    return;
-                }
-                org.bukkit.util.Vector direction = player.getEyeLocation().getDirection().normalize();
-                Location spawnLocation = player.getEyeLocation().clone().add(direction.clone().multiply(0.4));
-                var dropped = player.getWorld().dropItem(spawnLocation, stack);
-                dropped.setVelocity(direction.multiply(0.35).add(new org.bukkit.util.Vector(0, 0.1, 0)));
-            }, i);
+            Item dropped = player.getWorld().dropItem(spawnLocation, stacksToDrop.get(i).clone());
+            double spread = (i % 2 == 0 ? 1 : -1) * 0.06 * ((i + 1) / 2);
+            dropped.setVelocity(direction.clone().multiply(0.35)
+                .add(sideways.clone().multiply(spread))
+                .add(new Vector(0, 0.1, 0)));
         }
+        return true;
     }
 
     List<String> createManageClaimLore(PlayerDataStore.OrderEntry order) {
