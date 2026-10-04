@@ -116,9 +116,24 @@ public final class PlayerDataStore {
         markDirty(playerId, true);
     }
 
-    public void saveAndUnload(UUID playerId) {
+    /**
+     * Writes a player's data out when they leave, but keeps it in memory.
+     *
+     * <p>This used to evict the player from the cache as well. Their orders do
+     * not stop being used when they log off, though: a deliverer, or a /sell
+     * filling orders, can be holding this exact {@link PlayerData} on another
+     * thread - on Folia, another region - at the moment it is evicted. Any
+     * change made to it after that lands on an object nobody reads again, and
+     * the next lookup loads the order fresh without it. The deliverer has been
+     * paid by then, so the order still holds the money it just paid out, and
+     * cancelling it refunds that money a second time.
+     *
+     * <p>Every player's orders are already held in memory for the order
+     * browser, so keeping the live copy costs next to nothing.
+     */
+    public void saveOnQuit(UUID playerId) {
         ordersRevision.incrementAndGet();
-        writeBehind.snapshotAndWriteAsync(playerId, true);
+        writeBehind.snapshotAndWriteAsync(playerId, false);
     }
 
     public void saveAll() {

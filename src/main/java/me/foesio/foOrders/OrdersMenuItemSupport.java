@@ -10,10 +10,14 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Tag;
+import org.bukkit.block.Container;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BlockStateMeta;
+import org.bukkit.inventory.meta.BundleMeta;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -242,9 +246,15 @@ final class OrdersMenuItemSupport {
             if (!matchesCustomTemplateMeta(item, template)) {
                 return false;
             }
+            if (!isAsGoodAsNew(item, template)) {
+                return false;
+            }
         } else {
             wantedMaterial = resolveMaterial(order.getMaterial());
             if (item.getType() != wantedMaterial) {
+                return false;
+            }
+            if (!isAsGoodAsNew(item, null)) {
                 return false;
             }
         }
@@ -265,6 +275,46 @@ final class OrdersMenuItemSupport {
             }
         }
         return true;
+    }
+
+    /**
+     * Whether {@code item} is in as good a state as what the order pays out.
+     *
+     * <p>A claim never hands back the delivered item itself: it is paid out as
+     * a fresh stack from {@link #createOrderStack}. So a worn tool, or a
+     * shulker box or bundle with something inside, cannot count as a match. A
+     * worn item would come back to the order's owner fully repaired, which
+     * two accounts can use to repair anything for free, and whatever a
+     * container held would be destroyed rather than delivered.
+     *
+     * @param template the custom item the order is for, whose own wear is
+     *                 allowed, or null for a plain material order
+     */
+    boolean isAsGoodAsNew(ItemStack item, ItemStack template) {
+        if (damageOf(item) > damageOf(template)) {
+            return false;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta instanceof BundleMeta bundleMeta && bundleMeta.hasItems()) {
+            return false;
+        }
+        if (meta instanceof BlockStateMeta blockStateMeta
+            && blockStateMeta.hasBlockState()
+            && blockStateMeta.getBlockState() instanceof Container container) {
+            for (ItemStack content : container.getInventory().getContents()) {
+                if (content != null && content.getType() != Material.AIR) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static int damageOf(ItemStack item) {
+        if (item == null || !(item.getItemMeta() instanceof Damageable damageable) || !damageable.hasDamage()) {
+            return 0;
+        }
+        return damageable.getDamage();
     }
 
     int getAppliedEnchantmentLevel(ItemStack item, Enchantment enchantment) {

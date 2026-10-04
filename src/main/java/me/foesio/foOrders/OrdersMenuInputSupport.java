@@ -11,6 +11,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.Inventory;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -65,7 +67,7 @@ final class OrdersMenuInputSupport {
             }
             case PRICE -> {
                 NewOrderDraft draft = viewState.getOrCreateDraft();
-                double parsedPrice = manager.itemSupport.parsePositiveDouble(rawValue);
+                double parsedPrice = toWholeCents(manager.itemSupport.parsePositiveDouble(rawValue));
                 if (parsedPrice <= 0) {
                     draft = draft.withPricePerItem(1);
                     interaction.sendInvalidAmountActionbar(player);
@@ -88,6 +90,22 @@ final class OrdersMenuInputSupport {
         if (player.isOnline()) {
             manager.itemSupport.reopenAfterSignInput(player, inputType);
         }
+    }
+
+    /**
+     * Rounds a typed price to whole cents, and anything under a cent to zero
+     * so it is rejected.
+     *
+     * <p>A price like 0.004 each would otherwise be paid out one fraction of a
+     * cent per item delivered. An economy that rounds each deposit to the cent
+     * then pays the deliverer more than the order owner was charged, and two
+     * accounts can farm the difference one item at a time.
+     */
+    static double toWholeCents(double price) {
+        if (!Double.isFinite(price) || price <= 0D) {
+            return 0D;
+        }
+        return BigDecimal.valueOf(price).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
     private boolean isSearchInputType(SignInputType inputType) {
@@ -127,7 +145,7 @@ final class OrdersMenuInputSupport {
         if (manager.dialogInputService() != null) {
             manager.dialogInputService().clear(event.getPlayer());
         }
-        playerDataStore.saveAndUnload(playerId);
+        playerDataStore.saveOnQuit(playerId);
         historyDataStore.saveAndUnload(playerId);
     }
 

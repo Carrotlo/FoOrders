@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.logging.Level;
 
 /**
  * Serves {@link FoOrdersOrderFillApi} for plugins that want to push items into
@@ -88,7 +89,17 @@ final class OrderFillService implements FoOrdersOrderFillApi {
                 continue;
             }
             try {
-                FillOutcome outcome = fillSingleOrder(seller, sample, candidate.ownerId, orderId, unitsLeft, minPricePerItem, includeOwnOrders);
+                FillOutcome outcome;
+                try {
+                    outcome = fillSingleOrder(seller, sample, candidate.ownerId, orderId, unitsLeft, minPricePerItem, includeOwnOrders);
+                } catch (RuntimeException exception) {
+                    // The caller only takes items away for what this method
+                    // returns. Throwing now would hide payouts already made to
+                    // earlier orders in this loop, leaving the seller paid for
+                    // items they still hold - so stop here and report those.
+                    manager.plugin.getLogger().log(Level.SEVERE, "Filling order " + orderId + " failed; stopping this sale.", exception);
+                    break;
+                }
                 if (outcome == null) {
                     continue;
                 }
@@ -157,7 +168,13 @@ final class OrderFillService implements FoOrdersOrderFillApi {
         manager.playerDataStore.saveUrgent(ownerId);
 
         boolean completed = liveOrder.getAmountDelivered() >= liveOrder.getAmountOrdered();
-        announceFill(seller, ownerId, liveOrder, accepted, payout, completed);
+        try {
+            announceFill(seller, ownerId, liveOrder, accepted, payout, completed);
+        } catch (RuntimeException exception) {
+            // The fill itself is done and paid for; a failed history line or
+            // message must not make it look as if it never happened.
+            manager.plugin.getLogger().log(Level.WARNING, "Could not announce a fill of order " + orderId + ".", exception);
+        }
         return new FillOutcome(accepted, payout, completed, false);
     }
 
