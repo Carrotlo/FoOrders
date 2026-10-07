@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 public final class GuiConfigManager {
@@ -37,6 +38,12 @@ public final class GuiConfigManager {
     // later config migrations cannot accidentally skip this split.
     private static final int GUI_SPLIT_MIGRATION_VERSION = 10;
     private static final int GUI_BUTTON_SPRITE_MIGRATION_VERSION = 11;
+    private static final int GUI_BACK_SLOT_MIGRATION_VERSION = 12;
+    private static final Map<String, Integer> NEW_BACK_SLOTS = Map.of(
+        "item-select", 46,
+        "enchant-select", 46,
+        "claim-order", 49
+    );
     private static final Map<String, String> PUBLIC_GUI_FILES = Map.ofEntries(
         Map.entry("main", "guis/main.yml"),
         Map.entry("your-orders", "guis/your-orders.yml"),
@@ -87,6 +94,7 @@ public final class GuiConfigManager {
     private final Map<SlotsCacheKey, List<Integer>> slotsCache = new ConcurrentHashMap<>();
     private final Map<String, GuiButtonConfig> buttonConfigs = new ConcurrentHashMap<>();
     private YamlConfiguration guis = new YamlConfiguration();
+    private volatile Map<String, Integer> effectiveItemSlots = Map.of();
     private volatile GuiButtonConfig buttons = GuiButtonConfig.defaults();
     private volatile int revision;
 
@@ -100,18 +108,31 @@ public final class GuiConfigManager {
         warnedMessages.clear();
         clearCaches();
         migrations.runToVersion(GUI_SPLIT_MIGRATION_VERSION, this::migrateLegacyAggregate);
+        if (migrations.version() < GUI_SPLIT_MIGRATION_VERSION) {
+            throw new IllegalStateException("Could not migrate the legacy FoOrders GUI file; existing GUI settings were not replaced.");
+        }
         migrations.runToVersion(GUI_BUTTON_SPRITE_MIGRATION_VERSION, this::migrateDefaultBackAndSearchSprites);
+        if (migrations.version() < GUI_BUTTON_SPRITE_MIGRATION_VERSION) {
+            throw new IllegalStateException("Could not finish the FoOrders GUI button migration.");
+        }
+        migrations.runToVersion(GUI_BACK_SLOT_MIGRATION_VERSION, this::migrateNewBackSlots);
+        if (migrations.version() < GUI_BACK_SLOT_MIGRATION_VERSION) {
+            throw new IllegalStateException("Could not add the new FoOrders GUI Back button slots.");
+        }
 
         YamlConfiguration loaded = new YamlConfiguration();
         Map<String, GuiButtonConfig> loadedButtons = new LinkedHashMap<>();
+        Map<String, Integer> loadedSlots = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : PUBLIC_GUI_FILES.entrySet()) {
             String guiPath = entry.getKey();
-            YamlConfiguration active = (YamlConfiguration) GuiResourceLoader.loadAndBackfill(javaPlugin, entry.getValue());
+            YamlConfiguration active = (YamlConfiguration) GuiResourceLoader.load(javaPlugin, entry.getValue());
             mergeActiveGui(loaded, guiPath, active);
             loadedButtons.put(guiPath, loadButtons(active));
+            loadedSlots.putAll(resolveItemSlots(guiPath, active, bundledDefaults(entry.getValue()), this::warn));
         }
 
         guis = loaded;
+        effectiveItemSlots = Map.copyOf(loadedSlots);
         buttonConfigs.clear();
         buttonConfigs.putAll(loadedButtons);
         buttons = buttonConfigs.getOrDefault("main", GuiButtonConfig.defaults());
@@ -119,16 +140,16 @@ public final class GuiConfigManager {
         clearCaches();
     }
 
-    private void mergeActiveGui(YamlConfiguration combined, String guiPath, YamlConfiguration active) {
+    static void mergeActiveGui(YamlConfiguration combined, String guiPath, YamlConfiguration active) {
         if (active.isSet("title")) {
             combined.set("titles." + guiPath, active.get("title"));
         }
         copySection(active.getConfigurationSection("items"), combined, "items." + guiPath);
-        copySection(active.getConfigurationSection("labels"), combined, "labels");
+        copySection(active.getConfigurationSection("labels"), combined, "labels." + guiPath);
         copySection(active.getConfigurationSection("layout"), combined, "layout." + guiPath);
     }
 
-    private void copySection(ConfigurationSection source, YamlConfiguration target, String targetPath) {
+    private static void copySection(ConfigurationSection source, YamlConfiguration target, String targetPath) {
         if (source == null) {
             return;
         }
@@ -208,6 +229,7 @@ public final class GuiConfigManager {
             copySectionIfPresent(legacy.getConfigurationSection("items." + guiPath), target, defaults, "items");
             copySectionIfPresent(legacy.getConfigurationSection("layout." + guiPath), target, defaults, "layout");
             copyLabels(legacy, guiPath, target, defaults);
+            copyLegacyButtonOverrides(legacy, guiPath, target, defaults);
             copySectionIfPresent(legacyButtons, target, defaults, "buttons");
             targets.put(targetFile, target);
         }
@@ -244,8 +266,8 @@ public final class GuiConfigManager {
         }
     }
 
-    private void copySectionIfPresent(ConfigurationSection source, YamlConfiguration target,
-                                      YamlConfiguration defaults, String targetPath) {
+    static void copySectionIfPresent(ConfigurationSection source, YamlConfiguration target,
+                                     YamlConfiguration defaults, String targetPath) {
         if (source == null) {
             return;
         }
@@ -253,12 +275,87 @@ public final class GuiConfigManager {
             if (source.isConfigurationSection(key)) {
                 continue;
             }
-            copyIfUntouched(target, defaults, targetPath + "." + key, source.get(key));
+            String destination = targetPath + "." + key;
+            // Removed legacy options remain in orders.yml and its backup; do
+            // not present them as active settings in the new per-GUI file.
+            if (defaults.isSet(destination)) {
+                copyIfUntouched(target, defaults, destination, source.get(key));
+            }
         }
     }
 
-    private void copyIfUntouched(YamlConfiguration target, YamlConfiguration defaults,
-                                  String targetPath, Object ownerValue) {
+    static void copyLegacyButtonOverrides(YamlConfiguration legacy, String guiPath,
+                                          YamlConfiguration target, YamlConfiguration defaults) {
+        switch (guiPath) {
+            case "main", "item-select", "enchant-select", "claim-order", "history" -> {
+                copyLegacyButtonOverride(legacy, guiPath, "previous-page", "previous-page", target, defaults);
+                copyLegacyButtonOverride(legacy, guiPath, "next-page", "next-page", target, defaults);
+            }
+            default -> {
+            }
+        }
+        if (guiPath.equals("main") || guiPath.equals("item-select")) {
+            copyLegacyButtonOverride(legacy, guiPath, "search", "search", target, defaults);
+        }
+        if (guiPath.equals("history")) {
+            copyLegacyButtonOverride(legacy, guiPath, "back-to-orders", "back", target, defaults);
+        }
+    }
+
+    private static void copyLegacyButtonOverride(YamlConfiguration legacy, String guiPath,
+                                                 String oldItemKey, String newButtonKey,
+                                                 YamlConfiguration target, YamlConfiguration defaults) {
+        for (String field : List.of("material", "name", "lore", "custom-model-data")) {
+            String sourcePath = "items." + guiPath + "." + oldItemKey + "." + field;
+            String destinationPath = "buttons." + newButtonKey + "." + field;
+            if (!legacy.isSet(sourcePath)
+                || (!defaults.isSet(destinationPath) && !field.equals("custom-model-data"))) {
+                continue;
+            }
+            Object ownerValue = legacy.get(sourcePath);
+            if (Objects.equals(ownerValue, oldButtonDefault(oldItemKey, field))) {
+                continue;
+            }
+            if (field.equals("lore") && oldItemKey.equals("search") && ownerValue instanceof List<?> lines) {
+                ownerValue = lines.stream().map(line -> line instanceof String text
+                    ? text.replace("{search_status}", "{current}") : line).toList();
+            }
+            copyIfUntouched(target, defaults, destinationPath, ownerValue);
+        }
+    }
+
+    private static Object oldButtonDefault(String oldItemKey, String field) {
+        return switch (oldItemKey) {
+            case "previous-page" -> switch (field) {
+                case "material" -> "ARROW";
+                case "name" -> "#03fc88ʙᴀᴄᴋ";
+                case "lore" -> List.of("#ffffffClick to go to the previous page");
+                default -> null;
+            };
+            case "next-page" -> switch (field) {
+                case "material" -> "ARROW";
+                case "name" -> "#03fc88ɴᴇxᴛ";
+                case "lore" -> List.of("#ffffffClick to go to the next page");
+                default -> null;
+            };
+            case "search" -> switch (field) {
+                case "material" -> "OAK_SIGN";
+                case "name" -> "#03fc88ꜱᴇᴀʀᴄʜ";
+                case "lore" -> List.of("#ffffffClick to search", "#a7b8b0{search_status}");
+                default -> null;
+            };
+            case "back-to-orders" -> switch (field) {
+                case "material" -> "BARRIER";
+                case "name" -> "#ff5d73ʙᴀᴄᴋ";
+                case "lore" -> List.of("#ffffffClick to return to orders");
+                default -> null;
+            };
+            default -> null;
+        };
+    }
+
+    private static void copyIfUntouched(YamlConfiguration target, YamlConfiguration defaults,
+                                        String targetPath, Object ownerValue) {
         if (!target.isSet(targetPath) || Objects.deepEquals(target.get(targetPath), defaults.get(targetPath))) {
             target.set(targetPath, ownerValue);
         }
@@ -277,6 +374,10 @@ public final class GuiConfigManager {
     }
 
     private void restoreFiles(Map<File, byte[]> originalBytes) {
+        restoreFiles(originalBytes, this::warn);
+    }
+
+    private static void restoreFiles(Map<File, byte[]> originalBytes, Consumer<String> warn) {
         for (Map.Entry<File, byte[]> entry : originalBytes.entrySet()) {
             try {
                 if (entry.getValue() == null) {
@@ -285,9 +386,52 @@ public final class GuiConfigManager {
                     Files.write(entry.getKey().toPath(), entry.getValue());
                 }
             } catch (IOException exception) {
-                warn("Could not fully restore GUI migration target " + entry.getKey() + ".");
+                warn.accept("Could not fully restore GUI migration target " + entry.getKey() + ".");
             }
         }
+    }
+
+    /**
+     * Add only the newly introduced Back slot to older per-GUI files. A
+     * version gate means an owner who removes it afterward will not have it
+     * written back on every reload.
+     */
+    private boolean migrateNewBackSlots() {
+        return migrateNewBackSlots(plugin.getDataFolder(), this::warn);
+    }
+
+    static boolean migrateNewBackSlots(File dataFolder, Consumer<String> warn) {
+        Map<File, byte[]> originalBytes = new LinkedHashMap<>();
+        Map<File, YamlConfiguration> targets = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> entry : NEW_BACK_SLOTS.entrySet()) {
+            String resourcePath = PUBLIC_GUI_FILES.get(entry.getKey());
+            File targetFile = new File(dataFolder, resourcePath);
+            if (!targetFile.isFile()) {
+                continue;
+            }
+            YamlConfiguration target = YamlConfiguration.loadConfiguration(targetFile);
+            if (target.isSet("items.back.slot")) {
+                continue;
+            }
+            try {
+                originalBytes.put(targetFile, Files.readAllBytes(targetFile.toPath()));
+            } catch (IOException exception) {
+                warn.accept("Could not read GUI migration target " + resourcePath + ".");
+                return false;
+            }
+            target.set("items.back.slot", entry.getValue());
+            targets.put(targetFile, target);
+        }
+        for (Map.Entry<File, YamlConfiguration> entry : targets.entrySet()) {
+            try {
+                entry.getValue().save(entry.getKey());
+            } catch (IOException exception) {
+                restoreFiles(originalBytes, warn);
+                warn.accept("Could not add new GUI Back slots; modified GUI files were restored.");
+                return false;
+            }
+        }
+        return true;
     }
 
     public int revision() {
@@ -441,7 +585,113 @@ public final class GuiConfigManager {
     }
 
     public int itemSlot(String path, int fallback, int inventorySize) {
+        Integer effective = effectiveItemSlots.get(path);
+        if (effective != null && effective >= 0 && effective < inventorySize) {
+            return effective;
+        }
         return slot("items." + path + ".slot", fallback, inventorySize);
+    }
+
+    static Map<String, Integer> resolveItemSlots(String guiPath, YamlConfiguration active,
+                                                  YamlConfiguration defaults, Consumer<String> warn) {
+        ConfigurationSection defaultItems = defaults.getConfigurationSection("items");
+        if (defaultItems == null) {
+            return Map.of();
+        }
+
+        int inventorySize = guiInventorySize(guiPath);
+        List<SlotChoice> choices = new ArrayList<>();
+        for (String itemKey : defaultItems.getKeys(false)) {
+            String path = "items." + itemKey + ".slot";
+            if (!defaults.isSet(path)) {
+                continue;
+            }
+            Integer defaultSlot = parseSlot(defaults.get(path));
+            if (defaultSlot == null || defaultSlot < 0 || defaultSlot >= inventorySize) {
+                warn.accept("Invalid bundled GUI slot at " + PUBLIC_GUI_FILES.get(guiPath) + ":" + path + ".");
+                continue;
+            }
+            Integer configuredSlot = active.isSet(path) ? parseSlot(active.get(path)) : defaultSlot;
+            if (configuredSlot == null || configuredSlot < 0 || configuredSlot >= inventorySize) {
+                warn.accept("Invalid GUI slot at " + PUBLIC_GUI_FILES.get(guiPath) + ":" + path
+                    + ". Using bundled slot " + defaultSlot + ".");
+                configuredSlot = defaultSlot;
+            }
+            choices.add(new SlotChoice(itemKey, configuredSlot, defaultSlot));
+        }
+
+        Map<String, Integer> resolved = new LinkedHashMap<>();
+        Set<Integer> occupied = new HashSet<>();
+        // Unchanged defaults retain their slots when a custom override conflicts with them.
+        for (boolean customized : new boolean[]{false, true}) {
+            for (SlotChoice choice : choices) {
+                if ((choice.requested() != choice.fallback()) != customized) {
+                    continue;
+                }
+                int slot = choice.requested();
+                if (!availableSlot(guiPath, slot, inventorySize, occupied)) {
+                    slot = availableSlot(guiPath, choice.fallback(), inventorySize, occupied)
+                        ? choice.fallback() : firstAvailableSlot(guiPath, inventorySize, occupied);
+                    warn.accept("GUI slot conflict at " + PUBLIC_GUI_FILES.get(guiPath) + ":items."
+                        + choice.key() + ".slot. Using slot " + slot + ".");
+                }
+                occupied.add(slot);
+                resolved.put(guiPath + "." + choice.key(), slot);
+            }
+        }
+        return resolved;
+    }
+
+    private static int guiInventorySize(String guiPath) {
+        return switch (guiPath) {
+            case "your-orders", "new-order", "manage-order", "delivery-confirm" -> 27;
+            case "deliver" -> 36;
+            default -> 54;
+        };
+    }
+
+    private static Integer parseSlot(Object value) {
+        if (value instanceof Integer integer) {
+            return integer;
+        }
+        if (value instanceof Number number) {
+            double raw = number.doubleValue();
+            return Double.isFinite(raw) && raw == Math.rint(raw) && raw >= Integer.MIN_VALUE && raw <= Integer.MAX_VALUE
+                ? number.intValue() : null;
+        }
+        if (value instanceof String string) {
+            try {
+                return Integer.parseInt(string.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static boolean availableSlot(String guiPath, int slot, int inventorySize, Set<Integer> occupied) {
+        if (slot < 0 || slot >= inventorySize || occupied.contains(slot)) {
+            return false;
+        }
+        if (slot < 45 && (guiPath.equals("item-select") || guiPath.equals("enchant-select")
+            || guiPath.equals("claim-order") || guiPath.equals("history"))) {
+            return false;
+        }
+        return !guiPath.equals("manage-order") || slot != 16;
+    }
+
+    private static int firstAvailableSlot(String guiPath, int inventorySize, Set<Integer> occupied) {
+        int firstPreferred = inventorySize == 54 ? 45 : 0;
+        for (int offset = 0; offset < inventorySize; offset++) {
+            int slot = (firstPreferred + offset) % inventorySize;
+            if (availableSlot(guiPath, slot, inventorySize, occupied)) {
+                return slot;
+            }
+        }
+        throw new IllegalStateException("No free control slot in " + PUBLIC_GUI_FILES.get(guiPath));
+    }
+
+    private record SlotChoice(String key, int requested, int fallback) {
     }
 
     public int slot(String path, int fallback, int inventorySize) {
@@ -484,6 +734,10 @@ public final class GuiConfigManager {
                 warn("Invalid GUI slot at '" + path + "': " + slot + ". Expected 0-" + (inventorySize - 1) + ".");
                 continue;
             }
+            if (isMainOrderControlSlot(path, slot)) {
+                warn("Order content slot " + slot + " overlaps a main-menu button. Keeping the button visible.");
+                continue;
+            }
             if (!seenSlots.add(slot)) {
                 warn("Duplicate GUI slot at '" + path + "': " + slot + ". Ignoring duplicate.");
                 continue;
@@ -497,6 +751,9 @@ public final class GuiConfigManager {
                     warn("Invalid fallback GUI slot at '" + path + "': " + slot + ". Expected 0-" + (inventorySize - 1) + ".");
                     continue;
                 }
+                if (isMainOrderControlSlot(path, slot)) {
+                    continue;
+                }
                 if (!seenSlots.add(slot)) {
                     warn("Duplicate fallback GUI slot at '" + path + "': " + slot + ". Ignoring duplicate.");
                     continue;
@@ -505,6 +762,18 @@ public final class GuiConfigManager {
             }
         }
         return List.copyOf(slots);
+    }
+
+    private boolean isMainOrderControlSlot(String path, int slot) {
+        if (!"layout.main.order-slots".equals(path)) {
+            return false;
+        }
+        for (Map.Entry<String, Integer> entry : effectiveItemSlots.entrySet()) {
+            if (entry.getKey().startsWith("main.") && entry.getValue() == slot) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void warnConfig(String message) {

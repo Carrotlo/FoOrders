@@ -398,8 +398,6 @@ final class OrdersMenuViewSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         prepareMainMenuState(viewState);
-        viewState.mainSortIndex = 0;
-        viewState.mainFilterIndex = 0;
 
         if (searchText != null) {
             viewState.search = searchText.trim();
@@ -457,18 +455,6 @@ final class OrdersMenuViewSupport {
         int searchSlot = guiItemSlot("main.search", SEARCH_SLOT, inventorySize);
         int yourOrdersSlot = guiItemSlot("main.your-orders", YOUR_ORDERS_SLOT, inventorySize);
         int historySlot = guiItemSlot("main.history", HISTORY_SLOT, inventorySize);
-        warnMainSlotOverlaps(
-            orderSlots,
-            new String[]{
-                "main.previous-page", "main.next-page", "main.sort", "main.filter",
-                "main.refresh", "main.search", "main.your-orders", "main.history"
-            },
-            new int[]{
-                mainBackSlot, mainNextSlot, sortSlot, filterSlot,
-                refreshSlot, searchSlot, yourOrdersSlot, historySlot
-            }
-        );
-
         populateMainOrderFrame(menu, orderSlots);
         populateMainOrders(player, menu, visibleOrders, viewState.page, orderSlots);
 
@@ -479,8 +465,8 @@ final class OrdersMenuViewSupport {
             menu.setItem(mainNextSlot, manager.guiButtons("main").nextPage(player, viewState.page - 1, pageCount - 1));
         }
 
-        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main-sort-options", SORT_OPTIONS), viewState.mainSortIndex, ACCENT, WHITE));
-        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), viewState.mainFilterIndex, ACCENT, WHITE));
+        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main.main-sort-options", SORT_OPTIONS), viewState.mainSortIndex, ACCENT, WHITE));
+        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("main.filter-options", FILTER_OPTIONS), viewState.mainFilterIndex, ACCENT, WHITE));
         menu.setItem(refreshSlot, createGuiItem("main.refresh", Material.MAP, ACCENT + "ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to refresh")));
         menu.setItem(searchSlot, createSearchGuiItem("main", player, viewState.search));
         menu.setItem(yourOrdersSlot, createGuiItem("main.your-orders", Material.BOOK, ACCENT + "ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to view your Orders")));
@@ -644,6 +630,7 @@ final class OrdersMenuViewSupport {
         int filterSlot = guiItemSlot("item-select.filter", ITEM_SELECT_FILTER_SLOT, inventorySize);
         int searchSlot = guiItemSlot("item-select.search", ITEM_SELECT_SEARCH_SLOT, inventorySize);
         int backSlot = guiItemSlot("item-select.previous-page", ITEM_SELECT_BACK_SLOT, inventorySize);
+        int returnSlot = guiItemSlot("item-select.back", ITEM_SELECT_RETURN_SLOT, inventorySize);
         int nextSlot = guiItemSlot("item-select.next-page", ITEM_SELECT_NEXT_SLOT, inventorySize);
 
         Inventory menu = createMenu(MenuType.ITEM_SELECT, inventorySize, guiTitle("item-select", TITLE_SELECT_ITEM));
@@ -658,13 +645,14 @@ final class OrdersMenuViewSupport {
 
         menu.setItem(
             sortSlot,
-            createGuiCyclingItem("item-select.sort", Material.CAULDRON, LIGHT_ACCENT + "ꜱᴏʀᴛ", guiLabels("item-sort-options", ITEM_SORT_OPTIONS), itemSelectState.sortIndex, LIGHT_ACCENT, WHITE)
+            createGuiCyclingItem("item-select.sort", Material.CAULDRON, LIGHT_ACCENT + "ꜱᴏʀᴛ", guiLabels("item-select.item-sort-options", ITEM_SORT_OPTIONS), itemSelectState.sortIndex, LIGHT_ACCENT, WHITE)
         );
         menu.setItem(
             filterSlot,
-            createGuiCyclingItem("item-select.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("filter-options", FILTER_OPTIONS), itemSelectState.filterIndex, ACCENT, WHITE)
+            createGuiCyclingItem("item-select.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("item-select.filter-options", FILTER_OPTIONS), itemSelectState.filterIndex, ACCENT, WHITE)
         );
         menu.setItem(searchSlot, createSearchGuiItem("item-select", player, itemSelectState.search));
+        menu.setItem(returnSlot, manager.guiButtons("item-select").back(player));
 
         if (itemSelectState.page > 1) {
             menu.setItem(backSlot, manager.guiButtons("item-select").previousPage(player, itemSelectState.page - 1, pageCount - 1));
@@ -710,6 +698,7 @@ final class OrdersMenuViewSupport {
 
         int inventorySize = 54;
         int backSlot = guiItemSlot("enchant-select.previous-page", ENCHANT_SELECT_BACK_SLOT, inventorySize);
+        int returnSlot = guiItemSlot("enchant-select.back", ENCHANT_SELECT_RETURN_SLOT, inventorySize);
         int nextSlot = guiItemSlot("enchant-select.next-page", ENCHANT_SELECT_NEXT_SLOT, inventorySize);
         int clearSlot = guiItemSlot("enchant-select.clear", ENCHANT_SELECT_CLEAR_SLOT, inventorySize);
         int doneSlot = guiItemSlot("enchant-select.done", ENCHANT_SELECT_DONE_SLOT, inventorySize);
@@ -733,6 +722,7 @@ final class OrdersMenuViewSupport {
         if (viewState.enchantPage < pageCount) {
             menu.setItem(nextSlot, manager.guiButtons("enchant-select").nextPage(player, viewState.enchantPage - 1, pageCount - 1));
         }
+        menu.setItem(returnSlot, manager.guiButtons("enchant-select").back(player));
 
         menu.setItem(
             clearSlot,
@@ -973,6 +963,7 @@ final class OrdersMenuViewSupport {
 
         int inventorySize = 54;
         int backSlot = guiItemSlot("claim-order.previous-page", CLAIM_BACK_SLOT, inventorySize);
+        int returnSlot = guiItemSlot("claim-order.back", CLAIM_RETURN_SLOT, inventorySize);
         int nextSlot = guiItemSlot("claim-order.next-page", CLAIM_NEXT_SLOT, inventorySize);
         int dropPageSlot = guiItemSlot("claim-order.drop-page", CLAIM_DROP_PAGE_SLOT, inventorySize);
 
@@ -991,6 +982,7 @@ final class OrdersMenuViewSupport {
         if (viewState.claimPage < pageCount) {
             menu.setItem(nextSlot, manager.guiButtons("claim-order").nextPage(player, viewState.claimPage - 1, pageCount - 1));
         }
+        menu.setItem(returnSlot, manager.guiButtons("claim-order").back(player));
         menu.setItem(
             dropPageSlot,
             createGuiItem("claim-order.drop-page", Material.DISPENSER, MUTED + "ᴅʀᴏᴘ ᴘᴀɢᴇ", List.of(WHITE + "Drop all items on the page"))
@@ -1708,32 +1700,6 @@ final class OrdersMenuViewSupport {
     ) {
         private CyclingGuiItemKey {
             options = copyStringList(options);
-        }
-    }
-
-    private void warnMainSlotOverlaps(List<Integer> orderSlots, String[] controlNames, int[] controlSlots) {
-        for (int left = 0; left < controlSlots.length; left++) {
-            for (int right = left + 1; right < controlSlots.length; right++) {
-                if (controlSlots[left] != controlSlots[right]) {
-                    continue;
-                }
-                manager.guis().warnConfig(
-                    "Main GUI slot conflict: items." + controlNames[left] + ".slot and items."
-                        + controlNames[right] + ".slot both use slot " + controlSlots[left] + "."
-                );
-            }
-        }
-
-        for (int orderSlot : orderSlots) {
-            for (int index = 0; index < controlSlots.length; index++) {
-                if (orderSlot != controlSlots[index]) {
-                    continue;
-                }
-                manager.guis().warnConfig(
-                    "Main GUI slot conflict: layout.main.order-slots contains slot " + orderSlot
-                        + ", which is also used by items." + controlNames[index] + ".slot."
-                );
-            }
         }
     }
 

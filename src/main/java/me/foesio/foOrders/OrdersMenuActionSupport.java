@@ -410,8 +410,6 @@ final class OrdersMenuActionSupport {
 
         if (rawSlot == historySlot) {
             if (!canOpenOwnHistory(player)) {
-                manager.playSound(player, GUI_ERROR_SOUND);
-                manager.messages().send(player, "history.disabled");
                 return;
             }
             openHistoryMenu(player, player.getUniqueId(), HistoryDataStore.HistoryType.ORDER, false);
@@ -520,6 +518,10 @@ final class OrdersMenuActionSupport {
         }
 
         if (rawSlot == enchantSlot) {
+            NewOrderDraft draft = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState()).getOrCreateDraft();
+            if (!supportsOrderEnchantments(draft.customItemId(), resolveDraftMaterial(draft))) {
+                return;
+            }
             manager.playSound(player, GUI_CLICK_SOUND);
             openEnchantSelectMenu(player, false);
             return;
@@ -545,7 +547,7 @@ final class OrdersMenuActionSupport {
         int cancelSlot = guiItemSlot("manage-order.cancel", MANAGE_CANCEL_SLOT, inventorySize);
         int claimSlot = guiItemSlot("manage-order.claim", MANAGE_CLAIM_SLOT, inventorySize);
 
-        if (rawSlot == cancelSlot) {
+        if (rawSlot == cancelSlot && !selectedOrder.isCancelled()) {
             handleOrderCancellation(player, playerData, viewState, selectedOrder);
             return;
         }
@@ -892,6 +894,7 @@ final class OrdersMenuActionSupport {
         int filterSlot = guiItemSlot("item-select.filter", ITEM_SELECT_FILTER_SLOT, inventorySize);
         int searchSlot = guiItemSlot("item-select.search", ITEM_SELECT_SEARCH_SLOT, inventorySize);
         int backSlot = guiItemSlot("item-select.previous-page", ITEM_SELECT_BACK_SLOT, inventorySize);
+        int returnSlot = guiItemSlot("item-select.back", ITEM_SELECT_RETURN_SLOT, inventorySize);
         int nextSlot = guiItemSlot("item-select.next-page", ITEM_SELECT_NEXT_SLOT, inventorySize);
 
         if (rawSlot == sortSlot) {
@@ -913,6 +916,11 @@ final class OrdersMenuActionSupport {
         if (rawSlot == searchSlot) {
             manager.playSound(player, GUI_SEARCH_SOUND);
             openSignInput(player, SignInputType.ITEM_SEARCH);
+            return;
+        }
+
+        if (rawSlot == returnSlot) {
+            openNewOrderMenu(player, GUI_BACK_SOUND);
             return;
         }
 
@@ -984,6 +992,7 @@ final class OrdersMenuActionSupport {
         int doneSlot = guiItemSlot("enchant-select.done", ENCHANT_SELECT_DONE_SLOT, inventorySize);
         int clearSlot = guiItemSlot("enchant-select.clear", ENCHANT_SELECT_CLEAR_SLOT, inventorySize);
         int backSlot = guiItemSlot("enchant-select.previous-page", ENCHANT_SELECT_BACK_SLOT, inventorySize);
+        int returnSlot = guiItemSlot("enchant-select.back", ENCHANT_SELECT_RETURN_SLOT, inventorySize);
         int nextSlot = guiItemSlot("enchant-select.next-page", ENCHANT_SELECT_NEXT_SLOT, inventorySize);
         int controlsSlot = guiItemSlot("enchant-select.controls", ENCHANT_SELECT_INFO_SLOT, inventorySize);
 
@@ -996,6 +1005,12 @@ final class OrdersMenuActionSupport {
             viewState.draft = draft.withEnchantLevels(Map.of());
             manager.playSound(player, GUI_CLEAR_SEARCH_SOUND);
             openEnchantSelectMenu(player, false);
+            return;
+        }
+
+        if (rawSlot == returnSlot) {
+            manager.playSound(player, GUI_BACK_SOUND);
+            openItemSelectMenu(player, false);
             return;
         }
 

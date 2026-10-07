@@ -142,6 +142,7 @@ public final class OrdersMenuManager implements Listener {
     static final int ITEM_SELECT_FILTER_SLOT = 49;
     static final int ITEM_SELECT_SEARCH_SLOT = 50;
     static final int ITEM_SELECT_BACK_SLOT = 45;
+    static final int ITEM_SELECT_RETURN_SLOT = 46;
     static final int ITEM_SELECT_NEXT_SLOT = 53;
 
     static final int MANAGE_CANCEL_SLOT = 11;
@@ -149,6 +150,7 @@ public final class OrdersMenuManager implements Listener {
     static final int MANAGE_ADMIN_ACTIONS_SLOT = 16;
 
     static final int CLAIM_BACK_SLOT = 45;
+    static final int CLAIM_RETURN_SLOT = 49;
     static final int CLAIM_NEXT_SLOT = 53;
     static final int CLAIM_DROP_PAGE_SLOT = 52;
 
@@ -156,6 +158,7 @@ public final class OrdersMenuManager implements Listener {
     static final int DELIVERY_CONFIRM_SLOT = 15;
 
     static final int ENCHANT_SELECT_BACK_SLOT = 45;
+    static final int ENCHANT_SELECT_RETURN_SLOT = 46;
     static final int ENCHANT_SELECT_CLEAR_SLOT = 48;
     static final int ENCHANT_SELECT_DONE_SLOT = 49;
     static final int ENCHANT_SELECT_INFO_SLOT = 50;
@@ -400,6 +403,9 @@ public final class OrdersMenuManager implements Listener {
         if (!tryMarkOrderMenuRefresh(player)) {
             return false;
         }
+        MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
+        viewState.mainSortIndex = 0;
+        viewState.mainFilterIndex = 0;
         openOrdersMenu(player, searchText);
         return true;
     }

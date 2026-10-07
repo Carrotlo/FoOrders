@@ -138,6 +138,10 @@ final class OrdersMenuInteractionSupport {
         }
 
         event.setCancelled(true);
+        if (!isAdminItemEdit && menuHolder.getGuiRevision() != manager.guis().revision()) {
+            reopenStalePublicMenu(player, menuHolder.getMenuType());
+            return;
+        }
 
         switch (menuHolder.getMenuType()) {
             case MAIN -> actionSupport.handleMainClick(player, event.getRawSlot(), event.getClick());
@@ -152,6 +156,23 @@ final class OrdersMenuInteractionSupport {
             case ADMIN_ORDER_ACTIONS -> actionSupport.handleAdminOrderActionClick(player, event.getRawSlot());
             case ADMIN_ITEM_EDIT -> actionSupport.handleAdminItemEditClick(player, event);
             case DELIVER -> {
+            }
+        }
+    }
+
+    private void reopenStalePublicMenu(Player player, MenuType menuType) {
+        MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
+        switch (menuType) {
+            case MAIN -> manager.viewSupport.openOrdersMenu(player, null);
+            case YOUR_ORDERS -> manager.viewSupport.openYourOrdersMenu(player);
+            case NEW_ORDER -> manager.viewSupport.openNewOrderMenu(player);
+            case ITEM_SELECT -> manager.viewSupport.openItemSelectMenu(player, false);
+            case ENCHANT_SELECT -> manager.viewSupport.openEnchantSelectMenu(player, false);
+            case MANAGE_ORDER -> manager.viewSupport.openManageOrderMenu(player, viewState.manageOrderIndex);
+            case CLAIM_ORDER -> manager.viewSupport.openClaimOrderMenu(player, false);
+            case DELIVERY_CONFIRM -> manager.viewSupport.openDeliveryConfirmMenu(player);
+            case HISTORY -> manager.viewSupport.openHistoryMenu(player, false);
+            default -> {
             }
         }
     }

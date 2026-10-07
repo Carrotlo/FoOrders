@@ -43,16 +43,6 @@ layout:
     - 34
 
 buttons:
-  back:
-    material: IRON_DOOR
-    name: ":iron_door: {theme}&lBACK"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fReturn to the previous menu."
-      - " "
-      - "{good}→ Click to Go Back ←"
   previous-page:
     material: ARROW
     name: "{theme}&lPREVIOUS PAGE"
@@ -86,9 +76,6 @@ buttons:
 
 items:
   gray-pane:
-    material: GRAY_STAINED_GLASS_PANE
-    name: ""
-  black-pane:
     material: GRAY_STAINED_GLASS_PANE
     name: ""
   empty-order-slot:

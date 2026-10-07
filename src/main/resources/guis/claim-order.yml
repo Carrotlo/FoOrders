@@ -32,18 +32,9 @@ buttons:
       - "&7&l | &fPage {page}/{max_page}."
       - " "
       - "{good}→ Click to Next Page ←"
-  search:
-    material: NAME_TAG
-    name: ":name_tag: {theme}&lSEARCH"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fCurrent: {current}"
-      - " "
-      - "{good}→ Click to Search ←"
-
 items:
+  back:
+    slot: 49
   previous-page:
     slot: 45
   next-page:

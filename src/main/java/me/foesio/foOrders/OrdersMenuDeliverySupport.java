@@ -177,8 +177,15 @@ final class OrdersMenuDeliverySupport {
 
         int inventorySize = 54;
         int backSlot = guiItemSlot("claim-order.previous-page", CLAIM_BACK_SLOT, inventorySize);
+        int returnSlot = guiItemSlot("claim-order.back", CLAIM_RETURN_SLOT, inventorySize);
         int nextSlot = guiItemSlot("claim-order.next-page", CLAIM_NEXT_SLOT, inventorySize);
         int dropPageSlot = guiItemSlot("claim-order.drop-page", CLAIM_DROP_PAGE_SLOT, inventorySize);
+
+        if (rawSlot == returnSlot) {
+            manager.playSound(player, GUI_BACK_SOUND);
+            player.closeInventory();
+            return;
+        }
 
         if (rawSlot == backSlot && viewState.claimPage > 1) {
             viewState.claimPage--;

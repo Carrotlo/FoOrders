@@ -59,6 +59,8 @@ buttons:
       - "{good}→ Click to Search ←"
 
 items:
+  back:
+    slot: 46
   sort:
     slot: 48
     material: CAULDRON
