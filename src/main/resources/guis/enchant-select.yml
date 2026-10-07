@@ -1,6 +1,11 @@
 # Public enchantment selection menu.
 title: "&8ᴇɴᴄʜᴀɴᴛꜱ"
 
+labels:
+  none: "None"
+  # Optional translations keyed by enchantment name (e.g. SHARPNESS).
+  enchantment-names: {}
+
 buttons:
   back:
     material: IRON_DOOR
@@ -33,6 +38,17 @@ buttons:
       - " "
       - "{good}→ Click to Next Page ←"
 items:
+  entry:
+    name: "{theme}{enchant}"
+    lore:
+      - "#a7b8b0Current: {theme}{current}"
+      - "#a7b8b0Max: {theme}{max}"
+      - "#a7b8b0For {item}"
+      - " "
+      - "#ffffffLeft click: +1 level"
+      - "#ffffffRight click: -1 level"
+      - "#ffffffShift + Left: +5 levels"
+      - "#ffffffShift + Right: -5 levels"
   back:
     slot: 46
   previous-page:

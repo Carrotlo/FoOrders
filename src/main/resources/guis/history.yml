@@ -1,6 +1,12 @@
 # Public order and delivery history menu.
 title: "&8ʜɪꜱᴛᴏʀʏ • {tab}"
 
+labels:
+  order-tab-title: "ᴏʀᴅᴇʀ"
+  deliver-tab-title: "ᴅᴇʟɪᴠᴇʀ"
+  unknown-time: "Unknown"
+  unknown-event: "Event"
+
 buttons:
   back:
     material: IRON_DOOR

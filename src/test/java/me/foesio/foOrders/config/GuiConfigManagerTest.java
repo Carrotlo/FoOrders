@@ -6,11 +6,15 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,6 +37,28 @@ class GuiConfigManagerTest {
 
         assertEquals(List.of("Main owner label"), merged.getStringList("labels.main.filter-options"));
         assertEquals(List.of("Item owner label"), merged.getStringList("labels.item-select.filter-options"));
+    }
+
+    @Test
+    void materialTranslationsStayScopedAndDynamicTemplatesExistInBundledMenus() throws IOException {
+        YamlConfiguration main = bundledGui("main");
+        YamlConfiguration itemSelect = bundledGui("item-select");
+        YamlConfiguration enchantSelect = bundledGui("enchant-select");
+        YamlConfiguration manageOrder = bundledGui("manage-order");
+        itemSelect.set("labels.material-names.DIAMOND_SWORD", "Translated sword");
+        YamlConfiguration merged = new YamlConfiguration();
+        GuiConfigManager.mergeActiveGui(merged, "main", main);
+        GuiConfigManager.mergeActiveGui(merged, "item-select", itemSelect);
+        assertEquals("Translated sword", merged.getString("labels.item-select.material-names.DIAMOND_SWORD"));
+        assertFalse(merged.isSet("labels.main.material-names.DIAMOND_SWORD"));
+        for (YamlConfiguration gui : List.of(main, itemSelect)) {
+            assertTrue(gui.getStringList("items.sort.lore").contains("{options}"));
+            assertTrue(gui.getStringList("items.filter.lore").contains("{options}"));
+        }
+        assertTrue(itemSelect.isList("items.entry.lore"));
+        assertTrue(itemSelect.isList("items.custom-entry.lore"));
+        assertTrue(enchantSelect.isList("items.entry.lore"));
+        assertTrue(manageOrder.getStringList("items.claim.lore").contains("{claim_stacks}"));
     }
 
     @Test
@@ -136,10 +162,95 @@ class GuiConfigManagerTest {
         assertTrue(warnings.isEmpty());
     }
 
+    @Test
+    void dynamicLoreExpansionKeepsOwnerOrderAndSupportsRemovingOptions() {
+        List<String> configured = List.of("Own heading", "{options}", "Own footer");
+        assertEquals(List.of("Own heading", "First", "Second", "Own footer"),
+            GuiConfigManager.expandLore(configured, Map.of("{options}", List.of("First", "Second"))));
+        assertEquals(List.of("Own heading", "Own footer"),
+            GuiConfigManager.expandLore(configured, Map.of("{options}", List.of())));
+        assertEquals(configured, GuiConfigManager.expandLore(configured, Map.of()));
+    }
+
+    @Test
+    void publicTextMigrationBackfillsOnlyNewFieldsAndPreservesTranslations() throws IOException {
+        File main = saveOldFile("main", "items:\n  sort:\n    name: 'Translated sort'\n"
+            + "    lore:\n      - 'Owner lore'\n  filter:\n    name: 'Translated filter'\n"
+            + "  order-entry:\n    lore:\n      amount: 'Custom amount {item}'\n");
+        File itemSelect = saveOldFile("item-select", "items:\n  entry:\n    name: 'Owner entry {item}'\n"
+            + "  sort:\n    name: 'Owner sort'\nlabels:\n  filter-options:\n    - 'Translated all'\n");
+        saveOldFile("orders", "items:\n  main:\n    order-entry:\n      lore:\n"
+            + "        admin-cancel: 'Owner moderation hint'\n");
+        YamlConfiguration mainDefaults = new YamlConfiguration();
+        mainDefaults.set("items.sort.lore", List.of("Default header", "{options}"));
+        mainDefaults.set("items.sort.selected-option", "{option}");
+        mainDefaults.set("items.filter.lore", List.of("Default filter", "{options}"));
+        mainDefaults.set("items.order-entry.lore.admin-cancel", "Cancel hint");
+        YamlConfiguration itemDefaults = new YamlConfiguration();
+        itemDefaults.set("items.entry.name", "Default entry {item}");
+        itemDefaults.set("items.entry.lore", List.of("Default item lore"));
+        itemDefaults.set("items.sort.lore", List.of("Default sort lore"));
+        List<String> warnings = new ArrayList<>();
+
+        assertTrue(GuiConfigManager.migratePublicTextTemplates(dataFolder.toFile(),
+            Map.of("main", mainDefaults, "item-select", itemDefaults), warnings::add));
+        YamlConfiguration migratedMain = YamlConfiguration.loadConfiguration(main);
+        YamlConfiguration migratedItems = YamlConfiguration.loadConfiguration(itemSelect);
+        assertEquals("Translated sort", migratedMain.getString("items.sort.name"));
+        assertEquals(List.of("Owner lore"), migratedMain.getStringList("items.sort.lore"));
+        assertEquals("Custom amount {item}", migratedMain.getString("items.order-entry.lore.amount"));
+        assertEquals(List.of("Default filter", "{options}"), migratedMain.getStringList("items.filter.lore"));
+        assertEquals("Owner moderation hint", migratedMain.getString("items.order-entry.lore.admin-cancel"));
+        assertEquals("Owner entry {item}", migratedItems.getString("items.entry.name"));
+        assertEquals(List.of("Default item lore"), migratedItems.getStringList("items.entry.lore"));
+        assertEquals(List.of("Translated all"), migratedItems.getStringList("labels.filter-options"));
+        assertTrue(migratedItems.isSet("labels.material-names"));
+        assertTrue(new File(main.getParentFile(), main.getName() + ".pre-v13-backup").isFile());
+        byte[] once = Files.readAllBytes(main.toPath());
+        assertTrue(GuiConfigManager.migratePublicTextTemplates(dataFolder.toFile(),
+            Map.of("main", mainDefaults, "item-select", itemDefaults), warnings::add));
+        assertTrue(Arrays.equals(once, Files.readAllBytes(main.toPath())));
+        assertTrue(warnings.isEmpty());
+    }
+
+    @Test
+    void publicTextMigrationAddsEnchantSummaryOnlyToUntouchedDefaultLore() throws IOException {
+        String oldLore = "items:\n  enchants:\n    lore:\n      - '&8ʙᴜᴛᴛᴏɴ'\n      - ' '\n"
+            + "      - '&eⓘ Information ↓'\n      - '&7&l | &fConfigure item enchantments.'\n"
+            + "      - ' '\n      - '{good}→ Click to Edit Enchants ←'\n";
+        File newOrder = saveOldFile("new-order", oldLore);
+        YamlConfiguration defaults = new YamlConfiguration();
+        defaults.set("items.enchants.lore", List.of("Bundled heading", "{enchantments}", "Bundled hint"));
+        defaults.set("items.enchants.summary-line", "{enchant}: {level}");
+
+        assertTrue(GuiConfigManager.migratePublicTextTemplates(dataFolder.toFile(),
+            Map.of("new-order", defaults), ignored -> {}));
+        YamlConfiguration upgraded = YamlConfiguration.loadConfiguration(newOrder);
+        assertEquals(List.of("Bundled heading", "{enchantments}", "Bundled hint"),
+            upgraded.getStringList("items.enchants.lore"));
+        assertEquals("{enchant}: {level}", upgraded.getString("items.enchants.summary-line"));
+
+        upgraded.set("items.enchants.lore", List.of("Owner translated lore"));
+        upgraded.save(newOrder);
+        assertTrue(GuiConfigManager.migratePublicTextTemplates(dataFolder.toFile(),
+            Map.of("new-order", defaults), ignored -> {}));
+        assertEquals(List.of("Owner translated lore"),
+            YamlConfiguration.loadConfiguration(newOrder).getStringList("items.enchants.lore"));
+    }
+
     private File saveOldFile(String name, String contents) throws IOException {
         Path path = dataFolder.resolve("guis").resolve(name + ".yml");
         Files.createDirectories(path.getParent());
         Files.writeString(path, contents);
         return path.toFile();
+    }
+
+    private YamlConfiguration bundledGui(String name) throws IOException {
+        try (InputStream stream = getClass().getResourceAsStream("/guis/" + name + ".yml")) {
+            if (stream == null) {
+                throw new IOException("Missing bundled GUI " + name);
+            }
+            return YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
+        }
     }
 }

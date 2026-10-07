@@ -88,6 +88,7 @@ items:
       price: "{theme}${price} #ffffffeach"
       delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
       paid: "#a7b8b0${paid}/#3ecf8e${total} #a7b8b0Paid"
+      admin-cancel: "#ff5d73Shift + Left Click: Cancel this order"
   previous-page:
     slot: 45
   next-page:
@@ -96,10 +97,28 @@ items:
     slot: 47
     material: CAULDRON
     name: "{theme}&lSORT"
+    selected-option: "&7&l | &f{theme}» {option}"
+    other-option: "&7&l | &f#ffffff• {option}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{options}"
+      - " "
+      - "{good}→ Click to cycle ←"
   filter:
     slot: 48
     material: HOPPER
     name: "{theme}&lFILTER"
+    selected-option: "&7&l | &f{theme}» {option}"
+    other-option: "&7&l | &f#ffffff• {option}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{options}"
+      - " "
+      - "{good}→ Click to cycle ←"
   refresh:
     slot: 49
     material: MAP

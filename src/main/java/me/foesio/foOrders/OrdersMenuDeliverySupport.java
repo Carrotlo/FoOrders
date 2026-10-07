@@ -6,6 +6,7 @@ import me.foesio.foOrders.integration.DiscordWebhookNotifier;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
+import me.foesio.foOrders.util.TextFormat;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -1347,12 +1348,14 @@ final class OrdersMenuDeliverySupport {
         int maxLoreLines = 5;
         int maxStackLines = stacks.size() > maxLoreLines ? maxLoreLines - 1 : maxLoreLines;
         for (int i = 0; i < Math.min(stacks.size(), maxStackLines); i++) {
-            lore.add(LIGHT_GRAY + "- " + formatCompactAmount(stacks.get(i)) + "x " + itemName);
+            lore.add(manager.guis().text("items.manage-order.claim.stack-line", LIGHT_GRAY + "- {amount}x {item}",
+                TextFormat.placeholders("amount", formatCompactAmount(stacks.get(i)), "item", itemName)));
         }
 
         int hiddenStacks = stacks.size() - maxStackLines;
         if (hiddenStacks > 0) {
-            lore.add(LIGHT_GRAY + "And " + formatCompactAmount(hiddenStacks) + " more");
+            lore.add(manager.guis().text("items.manage-order.claim.more-line", LIGHT_GRAY + "And {count} more",
+                TextFormat.placeholders("count", formatCompactAmount(hiddenStacks))));
         }
         return lore;
     }

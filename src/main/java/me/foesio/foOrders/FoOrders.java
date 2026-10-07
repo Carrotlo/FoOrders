@@ -243,6 +243,9 @@ public final class FoOrders extends JavaPlugin {
     public void reloadGuiFiles() {
         if (guiConfigManager != null) {
             guiConfigManager.reload();
+            if (ordersMenuManager != null) {
+                ordersMenuManager.invalidateItemSelectCaches();
+            }
         }
     }
 

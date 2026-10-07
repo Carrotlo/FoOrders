@@ -17,3 +17,20 @@ items:
     slot: 14
     material: CHEST
     name: "#3ecf8e&lCLAIM ORDER"
+    stack-line: "#a7b8b0- {amount}x {item}"
+    more-line: "#a7b8b0And {count} more"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{claim_stacks}"
+      - " "
+      - "{good}→ Click to claim order ←"
+  admin-actions:
+    material: LAVA_BUCKET
+    name: "#ff5d73&lADMIN ACTIONS"
+    refund-line: "#ffffffRefund owner: {theme}${refund}"
+    no-refund-line: "#a7b8b0No refund remaining"
+    lore:
+      - "#ffffffOpen admin moderation for this order"
+      - "{refund_line}"

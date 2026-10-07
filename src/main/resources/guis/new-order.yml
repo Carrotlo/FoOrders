@@ -54,8 +54,10 @@ items:
       - " "
       - "&eⓘ Information ↓"
       - "&7&l | &fConfigure item enchantments."
+      - "{enchantments}"
       - " "
       - "{good}→ Click to Edit Enchants ←"
+    summary-line: "#a7b8b0- {enchant} {level}"
   confirm:
     slot: 16
     material: LIME_STAINED_GLASS_PANE

@@ -248,19 +248,34 @@ final class OrdersMenuViewSupport {
         return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
     }
 
+    private ItemStack createGuiItem(String path, Material material, String displayName, List<String> fallbackLore,
+                                    Map<String, String> placeholders, Map<String, List<String>> loreExpansions) {
+        GuiConfigManager.GuiItem item = manager.guis().item(
+            path, material, displayName, fallbackLore, placeholders, List.of(), loreExpansions
+        );
+        return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
+    }
+
     private ItemStack createGuiCyclingItem(String path, Material material, String displayName, List<String> options, int selectedIndex, String accentColor, String defaultColor) {
         int revision = refreshGuiItemCachesIfNeeded();
         String configuredSelectedColor = manager.messages().themeColor();
         String selectedColor = configuredSelectedColor == null || configuredSelectedColor.isBlank() ? accentColor : configuredSelectedColor;
         CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, material, displayName, options, selectedIndex, selectedColor, defaultColor);
         ItemStack template = cyclingGuiItemTemplates.computeIfAbsent(key, ignored -> {
-            GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, List.of());
             List<String> information = new ArrayList<>();
             for (int i = 0; i < options.size(); i++) {
                 boolean selected = i == selectedIndex;
-                information.add((selected ? selectedColor + "» " : defaultColor + "• ") + options.get(i));
+                information.add(manager.guis().text(
+                    "items." + path + (selected ? ".selected-option" : ".other-option"),
+                    (selected ? selectedColor + "» " : defaultColor + "• ") + "{option}",
+                    TextFormat.placeholders("option", options.get(i))
+                ));
             }
-            return createSimpleItem(item.material(), item.name(), FoButtonStyle.buttonLore(information, "cycle"), item.customModelData());
+            GuiConfigManager.GuiItem item = manager.guis().item(
+                path, material, displayName, FoButtonStyle.buttonLore(information, "cycle"),
+                Map.of(), List.of(), Map.of("{options}", information)
+            );
+            return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
         });
         return template.clone();
     }
@@ -503,7 +518,7 @@ final class OrdersMenuViewSupport {
         List<Integer> orderSlots = yourOrderSlots(newOrderSlot);
         int displayCount = Math.min(playerOrders.size(), Math.min(playerMaxOrders, orderSlots.size()));
         for (int i = 0; i < displayCount; i++) {
-            menu.setItem(orderSlots.get(i), createOrderItem(player.getName(), playerOrders.get(i), false));
+            menu.setItem(orderSlots.get(i), manager.itemSupport.createOrderItem(player.getName(), playerOrders.get(i), false, "your-orders"));
         }
 
         menu.setItem(newOrderSlot, createGuiItem("your-orders.new-order", Material.MAP, ACCENT + "New Order", List.of(WHITE + "Click to create new order")));
@@ -584,7 +599,10 @@ final class OrdersMenuViewSupport {
             if (!sanitizedEnchantments.isEmpty()) {
                 enchantLore.addAll(buildFullEnchantmentSummaryLore(sanitizedEnchantments));
             }
-            menu.setItem(enchantSlot, createGuiItem("new-order.enchants", Material.ENCHANTED_BOOK, LIGHT_ACCENT + "ᴇɴᴄʜᴀɴᴛꜱ", enchantLore));
+            menu.setItem(enchantSlot, createGuiItem(
+                "new-order.enchants", Material.ENCHANTED_BOOK, LIGHT_ACCENT + "ᴇɴᴄʜᴀɴᴛꜱ", enchantLore,
+                Map.of(), Map.of("{enchantments}", buildFullEnchantmentSummaryLore(sanitizedEnchantments))
+            ));
         }
 
         double subtotal = draft.amount() * draft.pricePerItem();
@@ -907,29 +925,28 @@ final class OrdersMenuViewSupport {
                 createGuiItem("manage-order.cancel", Material.RED_TERRACOTTA, CANCEL_RED + "ᴄᴀɴᴄᴇʟ", List.of(WHITE + "Click to cancel your order"))
             );
         }
+        List<String> claimStacks = createManageClaimLore(order);
         menu.setItem(
             claimSlot,
             createGuiItem(
                 "manage-order.claim",
                 Material.CHEST,
                 CONFIRM_GREEN + "ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ",
-                FoButtonStyle.buttonLore(createManageClaimLore(order), "claim order")
+                FoButtonStyle.buttonLore(claimStacks, "claim order"),
+                Map.of(), Map.of("{claim_stacks}", claimStacks)
             )
         );
         if (canModerateOrders(player)) {
             double remainingFunds = getRemainingOrderFunds(order);
+            String refundLine = remainingFunds > 0D
+                ? manager.guis().text("items.manage-order.admin-actions.refund-line", WHITE + "Refund owner: " + ACCENT + "${refund}",
+                    TextFormat.placeholders("refund", formatCompactAmount(remainingFunds)))
+                : manager.guis().text("items.manage-order.admin-actions.no-refund-line", MUTED + "No refund remaining", Map.of());
             menu.setItem(
                 MANAGE_ADMIN_ACTIONS_SLOT,
-                createSimpleItem(
-                    Material.LAVA_BUCKET,
-                    CANCEL_RED + "ᴀᴅᴍɪɴ ᴀᴄᴛɪᴏɴꜱ",
-                    List.of(
-                        WHITE + "Open admin moderation for this order",
-                        remainingFunds > 0D
-                            ? WHITE + "Refund owner: " + ACCENT + "$" + formatCompactAmount(remainingFunds)
-                            : MUTED + "No refund remaining"
-                    )
-                )
+                createGuiItem("manage-order.admin-actions", Material.LAVA_BUCKET,
+                    CANCEL_RED + "ᴀᴅᴍɪɴ ᴀᴄᴛɪᴏɴꜱ", List.of(WHITE + "Open admin moderation for this order", refundLine),
+                    TextFormat.placeholders("refund_line", refundLine))
             );
         }
         openMenu(player, menu);
@@ -1361,7 +1378,9 @@ final class OrdersMenuViewSupport {
         }
 
         String targetName = resolvePlayerName(targetPlayerId);
-        String tabName = activeType == HistoryDataStore.HistoryType.ORDER ? "ᴏʀᴅᴇʀ" : "ᴅᴇʟɪᴠᴇʀ";
+        String tabName = activeType == HistoryDataStore.HistoryType.ORDER
+            ? manager.guis().text("labels.history.order-tab-title", "ᴏʀᴅᴇʀ", Map.of())
+            : manager.guis().text("labels.history.deliver-tab-title", "ᴅᴇʟɪᴠᴇʀ", Map.of());
         int inventorySize = 54;
         int infoSlot = guiItemSlot("history.info", HISTORY_INFO_SLOT, inventorySize);
         int orderTabSlot = guiItemSlot("history.order-tab", HISTORY_ORDER_TAB_SLOT, inventorySize);
@@ -1447,7 +1466,7 @@ final class OrdersMenuViewSupport {
         Material icon = historyType == HistoryDataStore.HistoryType.ORDER ? Material.WRITABLE_BOOK : Material.CHEST_MINECART;
         String timestamp = entry.timestamp() > 0L
             ? historyTimestampFormatter.format(Instant.ofEpochMilli(entry.timestamp()))
-            : "Unknown";
+            : manager.guis().text("labels.history.unknown-time", "Unknown", Map.of());
         return createGuiItem(
             "history.entry",
             icon,
@@ -1468,7 +1487,7 @@ final class OrdersMenuViewSupport {
 
     String sanitizeHistoryLabel(String value) {
         if (value == null || value.isBlank()) {
-            return "Event";
+            return manager.guis().text("labels.history.unknown-event", "Event", Map.of());
         }
         return value;
     }

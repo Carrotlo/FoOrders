@@ -39,6 +39,25 @@ public final class GuiConfigManager {
     private static final int GUI_SPLIT_MIGRATION_VERSION = 10;
     private static final int GUI_BUTTON_SPRITE_MIGRATION_VERSION = 11;
     private static final int GUI_BACK_SLOT_MIGRATION_VERSION = 12;
+    private static final int GUI_PUBLIC_TEXT_MIGRATION_VERSION = 13;
+    private static final Map<String, List<String>> NEW_PUBLIC_TEXT_PATHS = Map.of(
+        "main", List.of("items.sort.lore", "items.sort.selected-option", "items.sort.other-option",
+            "items.filter.lore", "items.filter.selected-option", "items.filter.other-option",
+            "items.order-entry.lore.admin-cancel"),
+        "your-orders", List.of("items.order-entry.name", "items.order-entry.lore.amount",
+            "items.order-entry.lore.price", "items.order-entry.lore.delivered", "items.order-entry.lore.paid"),
+        "new-order", List.of("items.enchants.summary-line"),
+        "item-select", List.of("items.sort.lore", "items.sort.selected-option", "items.sort.other-option",
+            "items.filter.lore", "items.filter.selected-option", "items.filter.other-option",
+            "items.entry.name", "items.entry.lore", "items.custom-entry.name", "items.custom-entry.lore",
+            "labels.enchant-enabled", "labels.enchant-disabled"),
+        "enchant-select", List.of("items.entry.name", "items.entry.lore", "labels.none"),
+        "manage-order", List.of("items.claim.lore", "items.claim.stack-line", "items.claim.more-line",
+            "items.admin-actions.material", "items.admin-actions.name", "items.admin-actions.lore",
+            "items.admin-actions.refund-line", "items.admin-actions.no-refund-line"),
+        "history", List.of("labels.order-tab-title", "labels.deliver-tab-title", "labels.unknown-time",
+            "labels.unknown-event")
+    );
     private static final Map<String, Integer> NEW_BACK_SLOTS = Map.of(
         "item-select", 46,
         "enchant-select", 46,
@@ -118,6 +137,10 @@ public final class GuiConfigManager {
         migrations.runToVersion(GUI_BACK_SLOT_MIGRATION_VERSION, this::migrateNewBackSlots);
         if (migrations.version() < GUI_BACK_SLOT_MIGRATION_VERSION) {
             throw new IllegalStateException("Could not add the new FoOrders GUI Back button slots.");
+        }
+        migrations.runToVersion(GUI_PUBLIC_TEXT_MIGRATION_VERSION, this::migratePublicTextTemplates);
+        if (migrations.version() < GUI_PUBLIC_TEXT_MIGRATION_VERSION) {
+            throw new IllegalStateException("Could not add the FoOrders public GUI text templates.");
         }
 
         YamlConfiguration loaded = new YamlConfiguration();
@@ -434,6 +457,90 @@ public final class GuiConfigManager {
         return true;
     }
 
+    private boolean migratePublicTextTemplates() {
+        Map<String, YamlConfiguration> defaults = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : PUBLIC_GUI_FILES.entrySet()) {
+            defaults.put(entry.getKey(), bundledDefaults(entry.getValue()));
+        }
+        return migratePublicTextTemplates(plugin.getDataFolder(), defaults, this::warn);
+    }
+
+    static boolean migratePublicTextTemplates(File dataFolder, Map<String, YamlConfiguration> defaults,
+                                              Consumer<String> warn) {
+        Map<File, byte[]> originalBytes = new LinkedHashMap<>();
+        Map<File, YamlConfiguration> targets = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : NEW_PUBLIC_TEXT_PATHS.entrySet()) {
+            File targetFile = new File(dataFolder, "guis/" + entry.getKey() + ".yml");
+            if (!targetFile.isFile()) {
+                continue;
+            }
+            YamlConfiguration bundled = defaults.get(entry.getKey());
+            if (bundled == null) {
+                warn.accept("Missing bundled GUI defaults for " + entry.getKey() + ".");
+                return false;
+            }
+            YamlConfiguration active = YamlConfiguration.loadConfiguration(targetFile);
+            boolean changed = false;
+            if (entry.getKey().equals("main") && !active.isSet("items.order-entry.lore.admin-cancel")) {
+                File legacyFile = new File(dataFolder, LEGACY_FILE_NAME);
+                if (legacyFile.isFile()) {
+                    YamlConfiguration legacy = YamlConfiguration.loadConfiguration(legacyFile);
+                    String legacyPath = "items.main.order-entry.lore.admin-cancel";
+                    if (legacy.isString(legacyPath)) {
+                        active.set("items.order-entry.lore.admin-cancel", legacy.getString(legacyPath));
+                        changed = true;
+                    }
+                }
+            }
+            for (String path : entry.getValue()) {
+                if (!active.isSet(path) && bundled.isSet(path)) {
+                    active.set(path, bundled.get(path));
+                    changed = true;
+                }
+            }
+            if (entry.getKey().equals("new-order") && active.getStringList("items.enchants.lore").equals(List.of(
+                "&8ʙᴜᴛᴛᴏɴ", " ", "&eⓘ Information ↓", "&7&l | &fConfigure item enchantments.",
+                " ", "{good}→ Click to Edit Enchants ←"
+            ))) {
+                active.set("items.enchants.lore", bundled.get("items.enchants.lore"));
+                changed = true;
+            }
+            if (entry.getKey().equals("item-select") && !active.isSet("labels.material-names")) {
+                active.set("labels.material-names", Map.of());
+                changed = true;
+            }
+            if (entry.getKey().equals("enchant-select") && !active.isSet("labels.enchantment-names")) {
+                active.set("labels.enchantment-names", Map.of());
+                changed = true;
+            }
+            if (!changed) {
+                continue;
+            }
+            try {
+                byte[] original = Files.readAllBytes(targetFile.toPath());
+                File backup = new File(targetFile.getParentFile(), targetFile.getName() + ".pre-v13-backup");
+                if (!backup.exists()) {
+                    Files.copy(targetFile.toPath(), backup.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+                }
+                originalBytes.put(targetFile, original);
+            } catch (IOException exception) {
+                warn.accept("Could not back up GUI text migration target " + targetFile + ".");
+                return false;
+            }
+            targets.put(targetFile, active);
+        }
+        for (Map.Entry<File, YamlConfiguration> entry : targets.entrySet()) {
+            try {
+                entry.getValue().save(entry.getKey());
+            } catch (IOException exception) {
+                restoreFiles(originalBytes, warn);
+                warn.accept("Could not migrate public GUI text; modified files were restored.");
+                return false;
+            }
+        }
+        return true;
+    }
+
     public int revision() {
         return revision;
     }
@@ -483,13 +590,28 @@ public final class GuiConfigManager {
         Map<String, String> placeholders,
         List<String> hiddenLorePlaceholders
     ) {
+        return item(path, fallbackMaterial, fallbackName, fallbackLore, placeholders, hiddenLorePlaceholders, Map.of());
+    }
+
+    public GuiItem item(
+        String path,
+        Material fallbackMaterial,
+        String fallbackName,
+        List<String> fallbackLore,
+        Map<String, String> placeholders,
+        List<String> hiddenLorePlaceholders,
+        Map<String, List<String>> loreExpansions
+    ) {
         if ((placeholders == null || placeholders.isEmpty()) && (hiddenLorePlaceholders == null || hiddenLorePlaceholders.isEmpty())) {
+            if (loreExpansions != null && !loreExpansions.isEmpty()) {
+                return buildItem(path, fallbackMaterial, fallbackName, fallbackLore, Map.of(), List.of(), loreExpansions);
+            }
             return itemCache.computeIfAbsent(
                 new GuiItemCacheKey(path, fallbackMaterial, fallbackName, fallbackLore),
-                ignored -> buildItem(path, fallbackMaterial, fallbackName, fallbackLore, Map.of(), List.of())
+                ignored -> buildItem(path, fallbackMaterial, fallbackName, fallbackLore, Map.of(), List.of(), Map.of())
             );
         }
-        return buildItem(path, fallbackMaterial, fallbackName, fallbackLore, placeholders, hiddenLorePlaceholders);
+        return buildItem(path, fallbackMaterial, fallbackName, fallbackLore, placeholders, hiddenLorePlaceholders, loreExpansions);
     }
 
     private GuiItem buildItem(
@@ -498,7 +620,8 @@ public final class GuiConfigManager {
         String fallbackName,
         List<String> fallbackLore,
         Map<String, String> placeholders,
-        List<String> hiddenLorePlaceholders
+        List<String> hiddenLorePlaceholders,
+        Map<String, List<String>> loreExpansions
     ) {
         Map<String, String> safePlaceholders = placeholders == null ? Map.of() : placeholders;
         List<String> safeHiddenLorePlaceholders = hiddenLorePlaceholders == null ? List.of() : hiddenLorePlaceholders;
@@ -511,7 +634,7 @@ public final class GuiConfigManager {
             rawLore = fallbackLore == null ? List.of() : fallbackLore;
         }
         List<String> lore = new ArrayList<>();
-        for (String line : rawLore) {
+        for (String line : expandLore(rawLore, loreExpansions)) {
             if (containsHiddenPlaceholder(line, safeHiddenLorePlaceholders)) {
                 continue;
             }
@@ -523,6 +646,26 @@ public final class GuiConfigManager {
             lore,
             customModelData
         );
+    }
+
+    static List<String> expandLore(List<String> rawLore, Map<String, List<String>> expansions) {
+        if (expansions == null || expansions.isEmpty()) {
+            return rawLore;
+        }
+        List<String> expanded = new ArrayList<>();
+        for (String line : rawLore) {
+            List<String> replacement = expansions.get(line);
+            if (replacement == null) {
+                expanded.add(line);
+            } else {
+                expanded.addAll(replacement);
+            }
+        }
+        return expanded;
+    }
+
+    public String materialName(Material material, String fallback) {
+        return text("labels.item-select.material-names." + material.name(), fallback, Map.of());
     }
 
     private boolean containsHiddenPlaceholder(String line, List<String> hiddenLorePlaceholders) {

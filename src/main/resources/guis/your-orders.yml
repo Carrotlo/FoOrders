@@ -2,6 +2,13 @@
 title: "&8ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
 
 items:
+  order-entry:
+    name: "{theme}{owner}'s Order"
+    lore:
+      amount: "{theme}{amount} #ffffff{item}"
+      price: "{theme}${price} #ffffffeach"
+      delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
+      paid: "#a7b8b0${paid}/#3ecf8e${total} #a7b8b0Paid"
   new-order:
     slot: 26
     material: MAP
