@@ -1,11 +1,13 @@
-# Public delivery confirmation menu.
 title: "&8ᴄᴏɴꜰɪʀᴍᴀᴛɪᴏɴ"
-
-items:
+rows: 3
+filler:
+  enabled: false
+buttons:
   cancel:
     slot: 11
-    material: RED_STAINED_GLASS_PANE
-    name: "#ff5d73&lCANCEL"
+    enabled: true
+    material: "RED_STAINED_GLASS_PANE"
+    name: ":red_stained_glass_pane: #ff5d73&lCANCEL"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -13,10 +15,23 @@ items:
       - "&7&l | &fReturn without delivering the order."
       - " "
       - "{good}→ Click to Cancel ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.delivery-confirm.cancel"
   confirm:
     slot: 15
-    material: LIME_STAINED_GLASS_PANE
-    name: "#3ecf8e&lCONFIRM"
+    enabled: true
+    material: "LIME_STAINED_GLASS_PANE"
+    name: ":lime_stained_glass_pane: #3ecf8e&lCONFIRM"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -24,3 +39,15 @@ items:
       - "&7&l | &fConfirm delivery of this order."
       - " "
       - "{good}→ Click to Confirm Delivery ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.delivery-confirm.confirm"

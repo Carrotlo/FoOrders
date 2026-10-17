@@ -3,9 +3,10 @@ package me.foesio.foOrders;
 import me.foesio.foOrders.util.TextFormat;
 import me.foesio.foOrders.config.GuiConfigManager;
 import me.foesio.core.dialog.DialogIcons;
+import me.foesio.core.gui.publicgui.PublicGuiItemRenderer;
+import me.foesio.core.gui.publicgui.PublicGuiRenderInput;
 import me.foesio.core.editor.EditorItemFactory;
 import me.foesio.core.number.LargeNumberParser;
-import me.foesio.core.number.NumberFormatters;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
 import org.bukkit.Bukkit;
@@ -16,6 +17,7 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -30,6 +32,10 @@ import java.util.Objects;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.StringJoiner;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.IntFunction;
 
 import static me.foesio.foOrders.OrdersMenuManager.*;
 
@@ -65,16 +71,25 @@ final class OrdersMenuItemSupport {
 
     ItemStack createOrderItem(String ownerName, PlayerDataStore.OrderEntry order,
                               boolean showAdminModerationLore, String guiPath) {
+        if (!manager.guis().itemEnabled(guiPath + ".order-entry")) {
+            return null;
+        }
         ItemStack item = createOrderStack(order, 1);
-        Material icon = item.getType();
+        Material originalMaterial = item.getType();
+        String materialName = order.getCustomItemId() == null
+            ? formatMaterialName(originalMaterial)
+            : resolveTemplateDisplayName(item);
+        GuiConfigManager.GuiItem visual = manager.guis().item(guiPath + ".order-entry",
+            item.getType(), "", List.of());
+        if (visual.material() != item.getType()) {
+            item.setType(visual.material());
+        }
+        item.setAmount(visual.amount());
         ItemMeta meta = item.getItemMeta();
         if (meta == null) {
             return item;
         }
 
-        String materialName = order.getCustomItemId() == null
-            ? formatMaterialName(icon)
-            : resolveTemplateDisplayName(item);
         String amount = formatCompactAmount(order.getAmountOrdered());
         String delivered = formatCompactAmount(order.getAmountDelivered());
         String amountLeft = formatCompactAmount(Math.max(0, order.getAmountOrdered() - order.getAmountDelivered()));
@@ -98,43 +113,45 @@ final class OrdersMenuItemSupport {
             "paid_left", paidLeft
         );
 
-        meta.setDisplayName(guiText(
+        setPublicDisplayName(meta, guiText(
             "items." + guiPath + ".order-entry.name",
             ACCENT + ownerName + "'s Order",
             placeholders
         ));
 
-        List<String> lore = new ArrayList<>();
-        lore.add(guiText(
-            "items." + guiPath + ".order-entry.lore.amount",
-            ACCENT + amount + " " + WHITE + materialName,
-            placeholders
-        ));
-        lore.add(guiText(
-            "items." + guiPath + ".order-entry.lore.price",
-            ACCENT + "$" + price + " " + WHITE + "each",
-            placeholders
-        ));
-        lore.add("");
-        lore.add(guiText(
-            "items." + guiPath + ".order-entry.lore.delivered",
-            PROGRESS_LEFT + delivered + "/" + PROGRESS_RIGHT + amount + " " + PROGRESS_LABEL + "Delivered",
-            placeholders
-        ));
-        lore.add(guiText(
-            "items." + guiPath + ".order-entry.lore.paid",
-            PROGRESS_LEFT + "$" + paid + "/" + PROGRESS_RIGHT + "$" + total + " " + PROGRESS_LABEL + "Paid",
-            placeholders
-        ));
-        if (showAdminModerationLore) {
-            lore.add("");
-            lore.add(guiText("items." + guiPath + ".order-entry.lore.admin-cancel",
-                CANCEL_RED + "Shift + Left Click: Cancel this order", placeholders));
+        String loreRoot = "items." + guiPath + ".order-entry.lore.";
+        Map<String, List<String>> loreLines = new LinkedHashMap<>();
+        for (String field : List.of("amount", "price", "delivered", "paid")) {
+            String path = loreRoot + field;
+            loreLines.put("{" + field + "_line}", manager.guis().has(path)
+                ? optionalLoreLine(guiText(path, "", placeholders)) : List.of());
         }
-
-        meta.setLore(lore);
+        String adminPath = loreRoot + "admin-cancel";
+        loreLines.put("{admin_cancel_line}", showAdminModerationLore && manager.guis().has(adminPath)
+            ? optionalLoreLine(guiText(adminPath, "", placeholders)) : List.of());
+        setPublicLore(meta, manager.guis().lines("items." + guiPath + ".order-entry.lore-layout",
+            placeholders, loreLines));
+        if (manager.guis().has("items." + guiPath + ".order-entry.custom-model-data")) {
+            meta.setCustomModelData(visual.customModelData());
+        }
+        manager.guis().applyItemFlags("items." + guiPath + ".order-entry.item-flags", meta);
         item.setItemMeta(meta);
         return item;
+    }
+
+    static List<String> optionalLoreLine(String rendered) {
+        return rendered == null || rendered.isEmpty() ? List.of() : List.of(rendered);
+    }
+
+    /** Spigot has no component ItemMeta setters, so strip sprite tokens at the final legacy setter. */
+    static void setPublicDisplayName(ItemMeta meta, String name) {
+        meta.setDisplayName(PlayerTextDelivery.usesPaperMessages() ? name
+            : PublicTextFallback.render(name));
+    }
+
+    static void setPublicLore(ItemMeta meta, List<String> lore) {
+        meta.setLore(PlayerTextDelivery.usesPaperMessages() ? lore : lore.stream()
+            .map(PublicTextFallback::render).toList());
     }
 
     private String guiText(String path, String fallback, Map<String, String> placeholders) {
@@ -161,8 +178,48 @@ final class OrdersMenuItemSupport {
         return EditorItemFactory.templateButton(material, accentColor, name, lore, "cycle");
     }
 
-    ItemStack createSimpleItem(Material material, String displayName, List<String> loreLines) {
-        return EditorItemFactory.templateItem(material, displayName, loreLines);
+    static ItemStack createSimpleItem(Material material, String displayName, List<String> loreLines) {
+        // Public GUI text is already the owner's final template. Core's
+        // EditorItemFactory.templateItem inserts a material sprite even when
+        // the owner deliberately removed that token from the configured name.
+        ItemStack item = new ItemStack(material == null || !material.isItem() ? Material.STONE : material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            if (!DialogIcons.applyItemMetaTemplate(meta, displayName, loreLines)) {
+                meta.setDisplayName(PublicTextFallback.render(displayName));
+                meta.setLore((loreLines == null ? List.<String>of() : loreLines).stream()
+                    .map(PublicTextFallback::render).toList());
+            }
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    static void applyConfiguredFlags(ItemMeta meta, GuiConfigManager.GuiItem configured) {
+        if (meta == null || configured == null || !configured.flagsConfigured()) {
+            return;
+        }
+        ItemFlag[] current = meta.getItemFlags().toArray(ItemFlag[]::new);
+        if (current.length > 0) {
+            meta.removeItemFlags(current);
+        }
+        if (!configured.itemFlags().isEmpty()) {
+            meta.addItemFlags(configured.itemFlags().toArray(ItemFlag[]::new));
+        }
+    }
+
+    private ItemStack applyConfiguredItemMeta(ItemStack item, GuiConfigManager.GuiItem configured) {
+        item.setAmount(configured.amount());
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return item;
+        }
+        if (configured.customModelData() != null) {
+            meta.setCustomModelData(configured.customModelData());
+        }
+        applyConfiguredFlags(meta, configured);
+        item.setItemMeta(meta);
+        return item;
     }
 
     ItemStack renderForViewer(Player player, ItemStack item) {
@@ -183,6 +240,40 @@ final class OrdersMenuItemSupport {
 
         item.setAmount(Math.max(1, amount));
         applyOrderEnchantments(item, sanitizeDraftEnchantments(order.getCustomItemId(), material, order.getEnchantments()));
+        return item;
+    }
+
+    ItemStack createClaimEntryItem(PlayerDataStore.OrderEntry order, int amount) {
+        if (!manager.guis().itemEnabled("claim-order.entry")) {
+            return null;
+        }
+        ItemStack item = createOrderStack(order, amount);
+        ItemMeta originalMeta = item.getItemMeta();
+        String itemName = originalMeta != null && originalMeta.hasDisplayName()
+            ? originalMeta.getDisplayName() : formatMaterialName(item.getType());
+        List<String> templateLore = originalMeta != null && originalMeta.hasLore()
+            ? List.copyOf(originalMeta.getLore()) : List.of();
+        GuiConfigManager.GuiItem configured = manager.guis().item(
+            "claim-order.entry", item.getType(), "", List.of(),
+            TextFormat.placeholders("item", itemName, "amount", formatCompactAmount(amount)),
+            List.of(), Map.of("{template_lore}", templateLore));
+        if (configured.material() != item.getType()) {
+            item.setType(configured.material());
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            if (manager.guis().has("items.claim-order.entry.name")) {
+                setPublicDisplayName(meta, configured.name());
+            }
+            setPublicLore(meta, configured.lore());
+            if (manager.guis().has("items.claim-order.entry.custom-model-data")) {
+                meta.setCustomModelData(configured.customModelData());
+            }
+            applyConfiguredFlags(meta, configured);
+            item.setItemMeta(meta);
+        }
+        // The click claims this many real items; presentation must not change it.
+        item.setAmount(amount);
         return item;
     }
 
@@ -379,6 +470,15 @@ final class OrdersMenuItemSupport {
         return selectable;
     }
 
+    boolean enchantSelectionEntriesAvailable() {
+        return manager.guis().sourceEntryStateEnabled("enchant-select.entry", "selected")
+            || manager.guis().sourceEntryStateEnabled("enchant-select.entry", "unselected");
+    }
+
+    List<Enchantment> getVisibleInventoryEnchantments(Material material) {
+        return enchantSelectionEntriesAvailable() ? getSelectableEnchantments(material) : List.of();
+    }
+
     Map<String, Integer> sanitizeDraftEnchantments(String customItemId, Material material, Map<String, Integer> rawEnchantments) {
         if (!supportsOrderEnchantments(customItemId, material) || rawEnchantments == null || rawEnchantments.isEmpty()) {
             return Map.of();
@@ -434,45 +534,54 @@ final class OrdersMenuItemSupport {
     }
 
     ItemStack createEnchantSelectionItem(Material material, Enchantment enchantment, int selectedLevel) {
-        Material icon = selectedLevel > 0 ? Material.ENCHANTED_BOOK : Material.BOOK;
+        if (!manager.guis().itemEnabled("enchant-select.entry")) {
+            return null;
+        }
+        Material icon = manager.guis().stateMaterial("enchant-select.entry", selectedLevel > 0);
+        if (icon == null) {
+            return null;
+        }
         int maxLevel = Math.max(1, enchantment.getMaxLevel());
         String enchantName = formatEnchantmentName(enchantment);
         String current = selectedLevel > 0
-            ? toRomanNumeral(selectedLevel) + WHITE + " (" + selectedLevel + ")"
+            ? manager.guis().configuredText("labels.enchant-select.level-format",
+                TextFormat.placeholders("roman", toRomanNumeral(selectedLevel), "level", selectedLevel))
             : manager.guis().text("labels.enchant-select.none", "None", Map.of());
         GuiConfigManager.GuiItem configured = manager.guis().item(
             "enchant-select.entry", icon, ACCENT + enchantName, List.of(),
             TextFormat.placeholders(
                 "enchant", enchantName,
                 "current", current,
-                "max", toRomanNumeral(maxLevel) + WHITE + " (" + maxLevel + ")",
+                "max", manager.guis().configuredText("labels.enchant-select.level-format",
+                    TextFormat.placeholders("roman", toRomanNumeral(maxLevel), "level", maxLevel)),
                 "item", formatMaterialName(material)
             )
         );
-        ItemStack item = EditorItemFactory.templateItem(configured.material(), configured.name(), configured.lore());
-        if (configured.customModelData() != null) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null) {
-                meta.setCustomModelData(configured.customModelData());
-                item.setItemMeta(meta);
-            }
-        }
-        return item;
+        return applyConfiguredItemMeta(
+            createSimpleItem(configured.material(), configured.name(), configured.lore()), configured);
     }
 
     List<String> buildFullEnchantmentSummaryLore(Map<String, Integer> enchantments) {
+        return renderEnchantmentSummaryLore(enchantments, manager.guis()::configuredText,
+            this::formatEnchantmentName, this::toRomanNumeral);
+    }
+
+    static List<String> renderEnchantmentSummaryLore(Map<String, Integer> enchantments,
+                                                     BiFunction<String, Map<String, String>, String> configuredText,
+                                                     Function<String, String> enchantName,
+                                                     IntFunction<String> romanNumeral) {
         if (enchantments == null || enchantments.isEmpty()) {
             return List.of();
         }
 
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(enchantments.entrySet());
-        entries.sort(Comparator.comparing(entry -> formatEnchantmentName(entry.getKey()), String.CASE_INSENSITIVE_ORDER));
+        entries.sort(Comparator.comparing(entry -> enchantName.apply(entry.getKey()), String.CASE_INSENSITIVE_ORDER));
         List<String> summary = new ArrayList<>(entries.size());
         for (Map.Entry<String, Integer> enchantEntry : entries) {
             int level = Math.max(1, enchantEntry.getValue());
-            summary.add(manager.guis().text("items.new-order.enchants.summary-line",
-                LIGHT_GRAY + "- {enchant} {level}",
-                TextFormat.placeholders("enchant", formatEnchantmentName(enchantEntry.getKey()), "level", toRomanNumeral(level))));
+            summary.addAll(optionalLoreLine(configuredText.apply("items.new-order.enchants.summary-line",
+                TextFormat.placeholders("enchant", enchantName.apply(enchantEntry.getKey()),
+                    "level", romanNumeral.apply(level)))));
         }
         return summary;
     }
@@ -486,29 +595,99 @@ final class OrdersMenuItemSupport {
         return appendEnchantmentsToName(baseName, normalizedEnchantments);
     }
 
+    Map<String, String> historyItemValues(PlayerDataStore.OrderEntry order) {
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("material", order.getMaterial() == null ? "" : order.getMaterial());
+        CustomItemStore.CustomItemDefinition custom = resolveCustomItemDefinition(order.getCustomItemId());
+        values.put("custom_item_name", custom == null ? "" : resolveTemplateDisplayName(custom.template()));
+        StringJoiner enchants = new StringJoiner(";");
+        Map<String, Integer> orderEnchants = order.getEnchantments();
+        if (orderEnchants != null) {
+            for (Map.Entry<String, Integer> entry : orderEnchants.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null && entry.getValue() > 0) {
+                    enchants.add(entry.getKey() + "=" + entry.getValue());
+                }
+            }
+        }
+        values.put("enchantments", enchants.toString());
+        return values;
+    }
+
+    String formatHistoryItem(Map<String, String> values) {
+        String customName = values.getOrDefault("custom_item_name", "");
+        Material material = Material.matchMaterial(values.getOrDefault("material", ""));
+        String baseName = customName.isBlank()
+            ? material == null ? "" : formatMaterialName(material)
+            : customName;
+        Map<String, Integer> enchants = new LinkedHashMap<>();
+        for (String part : values.getOrDefault("enchantments", "").split(";")) {
+            int separator = part.lastIndexOf('=');
+            if (separator <= 0) {
+                continue;
+            }
+            try {
+                int level = Integer.parseInt(part.substring(separator + 1));
+                if (level > 0) {
+                    enchants.put(part.substring(0, separator), level);
+                }
+            } catch (NumberFormatException ignored) {
+                // Preserve the rest of a historical event if one enchantment is invalid.
+            }
+        }
+        return appendEnchantmentsToName(baseName, enchants);
+    }
+
     String formatOrderDisplayName(Material material, Map<String, Integer> enchantments) {
         Map<String, Integer> normalizedEnchantments = sanitizeDraftEnchantments(material, enchantments);
         return appendEnchantmentsToName(formatMaterialName(material), normalizedEnchantments);
     }
 
     String appendEnchantmentsToName(String baseName, Map<String, Integer> normalizedEnchantments) {
-        if (normalizedEnchantments.isEmpty()) {
+        return renderEnchantmentName(baseName, normalizedEnchantments,
+            manager.guis().previewLimit("labels.main.item-display.max-enchants"),
+            manager.guis().has("labels.main.item-display.enchant-summary"),
+            manager.guis()::configuredText, this::formatEnchantmentName, this::toRomanNumeral);
+    }
+
+    static String renderEnchantmentName(String baseName, Map<String, Integer> normalizedEnchantments,
+                                        int maxEnchantPreview, boolean summaryConfigured,
+                                        BiFunction<String, Map<String, String>, String> configuredText,
+                                        Function<String, String> enchantName,
+                                        IntFunction<String> romanNumeral) {
+        if (normalizedEnchantments == null || normalizedEnchantments.isEmpty()) {
+            return baseName;
+        }
+        if (maxEnchantPreview <= 0 || !summaryConfigured) {
             return baseName;
         }
 
         List<Map.Entry<String, Integer>> entries = new ArrayList<>(normalizedEnchantments.entrySet());
-        entries.sort(Comparator.comparing(entry -> formatEnchantmentName(entry.getKey()), String.CASE_INSENSITIVE_ORDER));
+        entries.sort(Comparator.comparing(entry -> enchantName.apply(entry.getKey()), String.CASE_INSENSITIVE_ORDER));
         List<String> parts = new ArrayList<>();
-        int shown = Math.min(2, entries.size());
+        int shown = Math.min(maxEnchantPreview, entries.size());
         for (int i = 0; i < shown; i++) {
             Map.Entry<String, Integer> enchantEntry = entries.get(i);
             int level = Math.max(1, enchantEntry.getValue());
-            parts.add(formatEnchantmentName(enchantEntry.getKey()) + " " + toRomanNumeral(level));
+            String label = configuredText.apply("labels.main.item-display.enchant-level",
+                TextFormat.placeholders("enchant", enchantName.apply(enchantEntry.getKey()),
+                    "level", romanNumeral.apply(level)));
+            if (!label.isBlank()) {
+                parts.add(label);
+            }
         }
         if (entries.size() > shown) {
-            parts.add("+" + (entries.size() - shown));
+            String extra = configuredText.apply("labels.main.item-display.extra-enchants",
+                TextFormat.placeholders("count", entries.size() - shown));
+            if (!extra.isBlank()) {
+                parts.add(extra);
+            }
         }
-        return baseName + " (" + String.join(", ", parts) + ")";
+        if (parts.isEmpty()) {
+            return baseName;
+        }
+        String separator = configuredText.apply("labels.main.item-display.enchant-separator", Map.of());
+        return configuredText.apply("labels.main.item-display.enchant-summary",
+            TextFormat.placeholders("item", baseName, "enchants", String.join(separator, parts)));
     }
 
     boolean isOrderBlacklisted(Material material, Map<String, Integer> enchantments) {
@@ -580,7 +759,7 @@ final class OrdersMenuItemSupport {
 
     String formatEnchantmentName(String enchantmentKey) {
         if (enchantmentKey == null || enchantmentKey.isBlank()) {
-            return "Unknown";
+            return manager.guis().configuredText("labels.enchant-select.unknown-enchantment", Map.of());
         }
 
         String normalized = enchantmentKey.toLowerCase(Locale.ROOT);
@@ -589,20 +768,10 @@ final class OrdersMenuItemSupport {
             normalized = normalized.substring(namespaceSeparator + 1);
         }
 
-        String[] rawParts = normalized.split("_");
-        StringBuilder builder = new StringBuilder();
-        for (String part : rawParts) {
-            if (part.isEmpty()) {
-                continue;
-            }
-            if (!builder.isEmpty()) {
-                builder.append(' ');
-            }
-            builder.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
-        }
-        String fallback = builder.isEmpty() ? "Unknown" : builder.toString();
-        return manager.guis().text("labels.enchant-select.enchantment-names." + normalized.toUpperCase(Locale.ROOT),
-            fallback, Map.of());
+        String namePath = "labels.enchant-select.enchantment-names." + normalized.toUpperCase(Locale.ROOT);
+        return manager.guis().has(namePath)
+            ? manager.guis().configuredText(namePath, Map.of())
+            : manager.guis().configuredText("labels.enchant-select.unknown-enchantment", Map.of());
     }
 
     String toRomanNumeral(int value) {
@@ -653,7 +822,7 @@ final class OrdersMenuItemSupport {
 
     String resolveTemplateDisplayName(ItemStack template) {
         if (template == null || template.getType() == Material.AIR) {
-            return "Unknown Item";
+            return manager.guis().configuredText("labels.item-select.unknown-item", Map.of());
         }
         ItemMeta meta = template.getItemMeta();
         if (meta != null && meta.hasDisplayName()) {
@@ -733,49 +902,26 @@ final class OrdersMenuItemSupport {
         return resolveMaterial(draft.materialName());
     }
 
-    ItemStack createOrderableSelectItem(OrderableItemOption option) {
-        if (!option.isCustom()) {
-            GuiConfigManager.GuiItem configured = manager.guis().item(
-                "item-select.entry", option.material(), LIGHT_ACCENT + option.displayName(),
-                List.of("Select this item."), TextFormat.placeholders("item", option.displayName())
-            );
-            ItemStack item = EditorItemFactory.templateItem(configured.material(), configured.name(), configured.lore());
-            if (configured.customModelData() != null) {
-                ItemMeta meta = item.getItemMeta();
-                if (meta != null) {
-                    meta.setCustomModelData(configured.customModelData());
-                    item.setItemMeta(meta);
-                }
-            }
-            return item;
-        }
+    PublicGuiRenderInput.EntryValue itemSelectEntryValue(OrderableItemOption option) {
+        ItemStack source = option.isCustom() ? option.previewItem() : new ItemStack(option.material());
+        Map<String, String> values = TextFormat.placeholders("item", option.displayName(),
+            "custom_id", option.isCustom() ? option.customItemId() : "",
+            "enchant_state", option.isCustom() ? manager.guis().configuredText(
+                option.allowOrderEnchants() ? "labels.item-select.enchant-enabled"
+                    : "labels.item-select.enchant-disabled", Map.of()) : "");
+        return new PublicGuiRenderInput.EntryValue(option.choiceKey(), source, values,
+            option.isCustom() ? "custom" : "vanilla");
+    }
 
-        ItemStack preview = option.previewItem().clone();
-        preview.setAmount(1);
-        ItemMeta meta = preview.getItemMeta();
-        if (meta == null) {
-            return preview;
-        }
-        String originalName = meta.hasDisplayName() ? meta.getDisplayName() : option.displayName();
-        GuiConfigManager.GuiItem configured = manager.guis().item(
-            "item-select.custom-entry", option.material(), originalName, List.of(),
-            TextFormat.placeholders(
-                "item", originalName,
-                "custom_id", option.customItemId(),
-                "enchant_state", manager.guis().text(
-                    option.allowOrderEnchants() ? "labels.item-select.enchant-enabled" : "labels.item-select.enchant-disabled",
-                    option.allowOrderEnchants() ? CONFIRM_GREEN + "Enabled" : CANCEL_RED + "Disabled", Map.of())
-            )
-        );
-        meta.setDisplayName(configured.name());
-        List<String> lore = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
-        lore.addAll(configured.lore());
-        meta.setLore(lore);
-        if (configured.customModelData() != null) {
-            meta.setCustomModelData(configured.customModelData());
-        }
-        preview.setItemMeta(meta);
-        return preview;
+    ItemStack createOrderableSelectItem(Player viewer, OrderableItemOption option) {
+        PublicGuiRenderInput.EntryValue value = itemSelectEntryValue(option);
+        var entry = manager.publicGuis().definition("item-select").entries().get("entry");
+        var sourceConfig = entry.sourceItem().forState(value.stateId());
+        if (!entry.enabled() || !sourceConfig.enabled()) return null;
+        Map<String, String> placeholders = new LinkedHashMap<>(manager.messages().ownerTokens());
+        placeholders.putAll(value.placeholders());
+        return PublicGuiItemRenderer.source(viewer, value.source(), sourceConfig,
+            placeholders, "entries.entry");
     }
 
     List<OrderableItemOption> getCachedFilteredSortedItems(ItemSelectState itemSelectState) {
@@ -842,6 +988,13 @@ final class OrdersMenuItemSupport {
     }
 
     private boolean matchesCachedItemOption(OrderableItemOption option, int filterIndex, String searchLower) {
+        if (!manager.guis().itemEnabled("item-select." + (option.isCustom() ? "custom-entry" : "entry"))) {
+            return false;
+        }
+        if (!manager.guis().sourceEntryStateEnabled("item-select.entry",
+            option.isCustom() ? "custom" : "vanilla")) {
+            return false;
+        }
         if (!matchesItemFilter(option.material(), filterIndex)) {
             return false;
         }
@@ -924,14 +1077,6 @@ final class OrdersMenuItemSupport {
             case PRICE -> formatCompactAmount(draft.pricePerItem());
             case MAIN_SEARCH -> mainSearch;
             case ITEM_SEARCH -> itemSearch;
-        };
-    }
-
-    String getSignInputTargetLabel(SignInputType inputType) {
-        return switch (inputType) {
-            case AMOUNT -> manager.messages().get("chat-input.targets.amount");
-            case PRICE -> manager.messages().get("chat-input.targets.price");
-            case MAIN_SEARCH, ITEM_SEARCH -> manager.messages().get("chat-input.targets.search");
         };
     }
 
@@ -1056,18 +1201,7 @@ final class OrdersMenuItemSupport {
     }
 
     String formatMaterialName(Material material) {
-        String[] rawParts = material.name().toLowerCase(Locale.ROOT).split("_");
-        StringBuilder builder = new StringBuilder();
-        for (String part : rawParts) {
-            if (part.isEmpty()) {
-                continue;
-            }
-            if (!builder.isEmpty()) {
-                builder.append(' ');
-            }
-            builder.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
-        }
-        return manager.guis().materialName(material, builder.toString());
+        return manager.guis().materialName(material);
     }
 
     int parsePositiveInt(String value) {
@@ -1081,11 +1215,11 @@ final class OrdersMenuItemSupport {
     }
 
     String formatMoney(double value) {
-        return NumberFormatters.money(value);
+        return manager.messages().formatPlainNumber(value);
     }
 
     String formatCompactAmount(double value) {
-        return NumberFormatters.compact(value);
+        return manager.messages().formatCompactNumber(value);
     }
 
     private record CachedOrderableItems(

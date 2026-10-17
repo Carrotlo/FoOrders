@@ -1,0 +1,302 @@
+# Edit sound settings here.
+
+editor.open:
+  enabled: true
+  sound: BLOCK_VAULT_OPEN_SHUTTER
+  category: MASTER
+  volume: 0.55
+  pitch: 1.0
+
+editor.back:
+  enabled: true
+  sound: BLOCK_VAULT_CLOSE_SHUTTER
+  category: MASTER
+  volume: 0.55
+  pitch: 0.95
+
+editor.page-next:
+  enabled: true
+  sound: BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON
+  category: MASTER
+  volume: 0.55
+  pitch: 1.1
+
+editor.page-previous:
+  enabled: true
+  sound: BLOCK_CHERRY_WOOD_BUTTON_CLICK_OFF
+  category: MASTER
+  volume: 0.55
+  pitch: 0.95
+
+editor.search:
+  enabled: true
+  sound: BLOCK_CRAFTER_CRAFT
+  category: MASTER
+  volume: 0.55
+  pitch: 1.0
+
+editor.clear-search:
+  enabled: true
+  sound: BLOCK_COPPER_BULB_TURN_OFF
+  category: MASTER
+  volume: 0.55
+  pitch: 1.0
+
+editor.toggle-on:
+  enabled: true
+  sound: BLOCK_VAULT_INSERT_ITEM
+  category: MASTER
+  volume: 1.0
+  pitch: 1.5
+
+editor.toggle-off:
+  enabled: true
+  sound: BLOCK_VAULT_INSERT_ITEM_FAIL
+  category: MASTER
+  volume: 1.0
+  pitch: 1.5
+
+editor.add:
+  enabled: true
+  sound: BLOCK_VAULT_INSERT_ITEM
+  category: MASTER
+  volume: 0.55
+  pitch: 1.1
+
+editor.delete:
+  enabled: true
+  sound: BLOCK_VAULT_EJECT_ITEM
+  category: MASTER
+  volume: 0.6
+  pitch: 0.9
+
+editor.cycle:
+  enabled: true
+  sound: BLOCK_COPPER_BULB_TURN_ON
+  category: MASTER
+  volume: 1.0
+  pitch: 0.5
+
+editor.save:
+  enabled: true
+  sound: BLOCK_VAULT_ACTIVATE
+  category: MASTER
+  volume: 0.65
+  pitch: 1.0
+
+editor.error:
+  enabled: true
+  sound: BLOCK_VAULT_INSERT_ITEM_FAIL
+  category: MASTER
+  volume: 0.75
+  pitch: 1.0
+
+gui.open:
+  enabled: true
+  sound: BLOCK_VAULT_OPEN_SHUTTER
+  category: MASTER
+  volume: 0.55
+  pitch: 1.0
+
+gui.click:
+  enabled: true
+  sound: BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON
+  category: MASTER
+  volume: 0.35
+  pitch: 1.0
+
+gui.sort:
+  enabled: true
+  sound: BLOCK_COPPER_BULB_TURN_ON
+  category: MASTER
+  volume: 0.55
+  pitch: 0.65
+
+gui.filter:
+  enabled: true
+  sound: BLOCK_COPPER_BULB_TURN_ON
+  category: MASTER
+  volume: 0.55
+  pitch: 0.85
+
+gui.refresh:
+  enabled: true
+  sound: BLOCK_VAULT_ACTIVATE
+  category: MASTER
+  volume: 0.45
+  pitch: 0.85
+
+gui.search:
+  enabled: true
+  sound: BLOCK_CRAFTER_CRAFT
+  category: MASTER
+  volume: 0.55
+  pitch: 1.0
+
+gui.clear-search:
+  enabled: true
+  sound: BLOCK_COPPER_BULB_TURN_OFF
+  category: MASTER
+  volume: 0.55
+  pitch: 1.0
+
+gui.page-next:
+  enabled: true
+  sound: BLOCK_BAMBOO_WOOD_BUTTON_CLICK_ON
+  category: MASTER
+  volume: 0.55
+  pitch: 1.1
+
+gui.page-previous:
+  enabled: true
+  sound: BLOCK_CHERRY_WOOD_BUTTON_CLICK_OFF
+  category: MASTER
+  volume: 0.55
+  pitch: 0.95
+
+gui.select:
+  enabled: true
+  sound: BLOCK_AMETHYST_BLOCK_CHIME
+  category: MASTER
+  volume: 0.45
+  pitch: 1.1
+
+gui.cycle:
+  enabled: true
+  sound: BLOCK_COPPER_BULB_TURN_ON
+  category: MASTER
+  volume: 0.65
+  pitch: 0.5
+
+gui.confirm:
+  enabled: true
+  sound: BLOCK_VAULT_ACTIVATE
+  category: MASTER
+  volume: 0.65
+  pitch: 1.0
+
+gui.cancel:
+  enabled: true
+  sound: BLOCK_VAULT_CLOSE_SHUTTER
+  category: MASTER
+  volume: 0.55
+  pitch: 0.95
+
+gui.back:
+  enabled: true
+  sound: BLOCK_VAULT_CLOSE_SHUTTER
+  category: MASTER
+  volume: 0.55
+  pitch: 0.95
+
+gui.error:
+  enabled: true
+  sound: BLOCK_VAULT_INSERT_ITEM_FAIL
+  category: MASTER
+  volume: 0.75
+  pitch: 1.0
+
+admin.reload:
+  enabled: true
+  sound: BLOCK_BEACON_ACTIVATE
+  category: MASTER
+  volume: 0.8
+  pitch: 1.2
+
+admin.reload-error:
+  enabled: true
+  sound: BLOCK_TRIAL_SPAWNER_OMINOUS_ACTIVATE
+  category: MASTER
+  volume: 0.8
+  pitch: 0.9
+
+admin.update-latest:
+  enabled: true
+  sound: BLOCK_TRIAL_SPAWNER_EJECT_ITEM
+  category: MASTER
+  volume: 0.8
+  pitch: 1.0
+
+admin.update-available:
+  enabled: true
+  sound: BLOCK_TRIAL_SPAWNER_OPEN_SHUTTER
+  category: MASTER
+  volume: 0.7
+  pitch: 0.9
+
+admin.update-error:
+  enabled: true
+  sound: BLOCK_TRIAL_SPAWNER_DETECT_PLAYER
+  category: MASTER
+  volume: 0.8
+  pitch: 1.0
+
+orders.created:
+  enabled: true
+  sound: ENTITY_PLAYER_LEVELUP
+  category: PLAYERS
+  volume: 0.8
+  pitch: 1.2
+
+orders.cancelled:
+  enabled: true
+  sound: BLOCK_BEACON_DEACTIVATE
+  category: MASTER
+  volume: 0.7
+  pitch: 0.9
+
+orders.admin-cancelled:
+  enabled: true
+  sound: BLOCK_TRIAL_SPAWNER_OMINOUS_ACTIVATE
+  category: MASTER
+  volume: 0.65
+  pitch: 0.9
+
+orders.admin-deleted:
+  enabled: true
+  sound: BLOCK_VAULT_EJECT_ITEM
+  category: MASTER
+  volume: 0.65
+  pitch: 0.9
+
+orders.delivery-open:
+  enabled: true
+  sound: BLOCK_BARREL_OPEN
+  category: MASTER
+  volume: 0.5
+  pitch: 1.0
+
+orders.delivery-confirm:
+  enabled: true
+  sound: BLOCK_CRAFTER_CRAFT
+  category: MASTER
+  volume: 0.5
+  pitch: 1.0
+
+orders.delivered:
+  enabled: true
+  sound: ENTITY_ITEM_PICKUP
+  category: PLAYERS
+  volume: 0.6
+  pitch: 1.1
+
+orders.filled:
+  enabled: true
+  sound: UI_TOAST_CHALLENGE_COMPLETE
+  category: MASTER
+  volume: 0.8
+  pitch: 1.0
+
+orders.claimed:
+  enabled: true
+  sound: ENTITY_ITEM_PICKUP
+  category: PLAYERS
+  volume: 0.35
+  pitch: 1.0
+
+orders.claimed-drop:
+  enabled: true
+  sound: BLOCK_DISPENSER_DISPENSE
+  category: MASTER
+  volume: 0.5
+  pitch: 0.9

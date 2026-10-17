@@ -1,0 +1,92 @@
+# Public new-order menu.
+title: "&8ɴᴇᴡ ᴏʀᴅᴇʀ"
+size: 27
+
+items:
+  cancel:
+    slot: 10
+    material: RED_STAINED_GLASS_PANE
+    name: "#ff5d73&lCANCEL"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fDiscard this order draft."
+      - " "
+      - "{good}→ Click to Cancel ←"
+  item:
+    slot: 12
+    name: "{theme}&lITEM"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelected: {item}"
+      - " "
+      - "{good}→ Click to Choose Item ←"
+  amount:
+    slot: 13
+    material: CHEST
+    name: "{theme}&lAMOUNT"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent amount: {amount}"
+      - " "
+      - "{good}→ Click to Set Amount ←"
+  price:
+    slot: 14
+    material: EMERALD
+    name: "{theme}&lPRICE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPrice per item: ${price}"
+      - " "
+      - "{good}→ Click to Set Price ←"
+  enchants:
+    slot: 15
+    material: ENCHANTED_BOOK
+    name: "{theme}&lENCHANTS"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fConfigure item enchantments."
+      - "{enchantments}"
+      - " "
+      - "{good}→ Click to Edit Enchants ←"
+    summary-line: "#a7b8b0- {enchant} {level}"
+  confirm:
+    slot: 16
+    material: LIME_STAINED_GLASS_PANE
+    name: "#3ecf8e&lCONFIRM"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSubtotal: {theme}${subtotal}"
+      - "&7&l | &fTax ({tax_percent}%): {theme}${tax}"
+      - "&7&l | &fTotal: #3ecf8e${total}"
+      - " "
+      - "{good}→ Click to Confirm Order ←"

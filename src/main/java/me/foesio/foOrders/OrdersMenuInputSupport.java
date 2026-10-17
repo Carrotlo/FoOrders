@@ -55,31 +55,25 @@ final class OrdersMenuInputSupport {
                 NewOrderDraft draft = viewState.getOrCreateDraft();
                 int parsedAmount = manager.itemSupport.parsePositiveInt(rawValue);
                 if (parsedAmount <= 0) {
-                    draft = draft.withAmount(1);
                     interaction.sendInvalidAmountActionbar(player);
-                } else {
-                    draft = draft.withAmount(parsedAmount);
                 }
-                viewState.draft = draft;
+                viewState.draft = withValidAmount(draft, parsedAmount);
             }
             case PRICE -> {
                 NewOrderDraft draft = viewState.getOrCreateDraft();
                 double parsedPrice = manager.itemSupport.parsePositiveDouble(rawValue);
-                if (parsedPrice <= 0) {
-                    draft = draft.withPricePerItem(1);
-                    interaction.sendInvalidAmountActionbar(player);
-                } else {
-                    draft = draft.withPricePerItem(parsedPrice);
+                if (!Double.isFinite(parsedPrice) || parsedPrice <= 0) {
+                    interaction.sendInvalidPriceActionbar(player);
                 }
-                viewState.draft = draft;
+                viewState.draft = withValidPrice(draft, parsedPrice);
             }
             case MAIN_SEARCH -> {
-                viewState.search = rawValue;
+                viewState.search = normalizeSearchInput(rawValue);
                 viewState.page = 1;
             }
             case ITEM_SEARCH -> {
                 ItemSelectState itemSelectState = viewState.getOrCreateItemSelectState();
-                itemSelectState.search = rawValue;
+                itemSelectState.search = normalizeSearchInput(rawValue);
                 itemSelectState.page = 1;
             }
         }
@@ -89,8 +83,16 @@ final class OrdersMenuInputSupport {
         }
     }
 
-    private boolean isSearchInputType(SignInputType inputType) {
-        return inputType == SignInputType.MAIN_SEARCH || inputType == SignInputType.ITEM_SEARCH;
+    static NewOrderDraft withValidAmount(NewOrderDraft draft, int amount) {
+        return amount > 0 ? draft.withAmount(amount) : draft;
+    }
+
+    static NewOrderDraft withValidPrice(NewOrderDraft draft, double price) {
+        return Double.isFinite(price) && price > 0D ? draft.withPricePerItem(price) : draft;
+    }
+
+    static String normalizeSearchInput(String value) {
+        return value == null ? "" : value.trim();
     }
 
     void onPlayerSwapHand(PlayerSwapHandItemsEvent event) {
@@ -133,12 +135,12 @@ final class OrdersMenuInputSupport {
         NewOrderDraft draft = viewState.getOrCreateDraft();
         ItemSelectState itemSelectState = viewState.getOrCreateItemSelectState();
         String row1Value = manager.itemSupport.getSignInputFirstLine(inputType, viewState.search, itemSelectState.search, draft);
-        String targetLabel = isSearchInputType(inputType) ? "Search" : manager.itemSupport.getSignInputTargetLabel(inputType);
-
         FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
         if (dialogInputService != null) {
-            boolean fallback = dialogInputService.willUseFallback(player);
-            boolean suppressInventoryClose = !fallback && manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
+            String targetLabel = dialogInputService.targetLabel(inputType);
+            boolean forceChatFallback = manager.isBedrockPlayer(player);
+            boolean fallback = dialogInputService.willUseFallback(player, inputType, forceChatFallback);
+            boolean suppressInventoryClose = manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
             if (suppressInventoryClose) {
                 inventoryCloseSuppressor.suppressNextClose(player);
             }
@@ -151,13 +153,8 @@ final class OrdersMenuInputSupport {
                 inputType,
                 row1Value,
                 targetLabel,
-                value -> {
-                    if (isSearchInputType(inputType) && value.equalsIgnoreCase("clear")) {
-                        handleInputFromChat(player, inputType, "");
-                        return;
-                    }
-                    handleInputFromChat(player, inputType, value);
-                },
+                forceChatFallback,
+                value -> handleInputFromChat(player, inputType, value),
                 () -> manager.itemSupport.reopenAfterSignInput(player, inputType)
             );
             if (opened) {
@@ -170,6 +167,8 @@ final class OrdersMenuInputSupport {
         if (manager.isOrdersMenu(player.getOpenInventory().getTopInventory())) {
             inventoryCloseSuppressor.clear(player);
         }
+        manager.messages().send(player, "chat-input.unavailable");
+        manager.playSound(player, OrdersMenuManager.GUI_ERROR_SOUND);
     }
 
     void openAdminItemSearch(Player player) {
@@ -180,7 +179,8 @@ final class OrdersMenuInputSupport {
             return;
         }
 
-        boolean fallback = dialogInputService.willUseFallback(player);
+        boolean forceChatFallback = manager.isBedrockPlayer(player);
+        boolean fallback = dialogInputService.willUseFallback(player, SignInputType.MAIN_SEARCH, forceChatFallback);
         boolean suppressInventoryClose = !fallback && manager.isOrdersMenu(player.getOpenInventory().getTopInventory());
         if (suppressInventoryClose) {
             inventoryCloseSuppressor.suppressNextClose(player);
@@ -194,6 +194,7 @@ final class OrdersMenuInputSupport {
             SignInputType.MAIN_SEARCH,
             viewState.adminEditorSearch,
             "Custom items",
+            forceChatFallback,
             value -> {
                 viewState.adminEditorSearch = value == null ? "" : value.trim();
                 viewState.adminEditorPage = 0;
@@ -210,6 +211,8 @@ final class OrdersMenuInputSupport {
         if (manager.isOrdersMenu(player.getOpenInventory().getTopInventory())) {
             inventoryCloseSuppressor.clear(player);
         }
+        manager.messages().send(player, "chat-input.unavailable");
+        manager.playSound(player, OrdersMenuManager.GUI_ERROR_SOUND);
     }
 
     private void warnNativeDialogFallback(Player player) {

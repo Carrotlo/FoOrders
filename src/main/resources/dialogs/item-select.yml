@@ -1,0 +1,57 @@
+# Native Paper item picker. Inventory fallback remains in guis/item-select.yml.
+# {item}, {custom_id}, {material}, and {color} are available in choice labels.
+enabled: true
+title: ":chest: Select Item"
+empty-message: "#a7b8b0No items match this search."
+body-width: 320
+columns: 3
+page-size: 45
+button-order: [search, sort, filter, previous, choices, next]
+can-close-with-escape: true
+pause: false
+
+preview:
+  width: 16
+  height: 16
+  show-decorations: false
+  show-tooltip: true
+
+search-input:
+  label: "Search"
+  width: 300
+  label-visible: true
+  max-length: 64
+
+search-button:
+  label: "#ffff55:spyglass: Search"
+  tooltip: "Search items."
+  width: 144
+
+sort-button:
+  label: "Sort: {option}"
+  tooltip: "Cycle item sort order"
+  width: 144
+
+filter-button:
+  label: "Filter: {option}"
+  tooltip: "Cycle item category"
+  width: 144
+
+previous-button:
+  label: "Previous page ({page}/{max_page})"
+  tooltip: "Show the previous page"
+  width: 144
+
+next-button:
+  label: "Next page ({page}/{max_page})"
+  tooltip: "Show the next page"
+  width: 144
+
+choice-button:
+  label: ":{material}: {color}{item}"
+  custom-label: ":{material}: {color}{item} ({custom_id})"
+  current-tooltip: "Current item."
+  other-tooltip: "Choose this item."
+  current-color: "#9CFF7A"
+  other-color: "#ffffff"
+  width: 144

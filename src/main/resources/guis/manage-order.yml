@@ -1,36 +1,83 @@
-# Public manage-order menu.
 title: "&8ᴍᴀɴᴀɢᴇ ᴏʀᴅᴇʀ"
-
-items:
-  cancel:
-    slot: 11
-    material: RED_TERRACOTTA
-    name: "#ff5d73&lCANCEL"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fCancel this order."
-      - " "
-      - "{good}→ Click to Cancel ←"
+rows: 3
+filler:
+  enabled: false
+buttons:
   claim:
     slot: 14
-    material: CHEST
-    name: "#3ecf8e&lCLAIM ORDER"
-    stack-line: "#a7b8b0- {amount}x {item}"
-    more-line: "#a7b8b0And {count} more"
+    enabled: true
+    material: "CHEST"
+    name: ":chest_minecart: #3ecf8e&lCLAIM ORDER"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
       - "&eⓘ Information ↓"
-      - "{claim_stacks}"
+      - "{options}"
       - " "
       - "{good}→ Click to claim order ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.manage-order.claim"
+    cycle:
+      selected-format: "{option}"
+      unselected-format: "{option}"
+entries:
+  cancel:
+    slots:
+      - 11
+    enabled: true
+    item:
+      material: "RED_TERRACOTTA"
+      name: ":red_terracotta: #ff5d73&lCANCEL"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fCancel this order."
+        - " "
+        - "{good}→ Click to Cancel ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.manage-order.cancel"
   admin-actions:
-    material: LAVA_BUCKET
-    name: "#ff5d73&lADMIN ACTIONS"
-    refund-line: "#ffffffRefund owner: {theme}${refund}"
-    no-refund-line: "#a7b8b0No refund remaining"
-    lore:
-      - "#ffffffOpen admin moderation for this order"
-      - "{refund_line}"
+    slots:
+      - 16
+    enabled: true
+    item:
+      material: "LAVA_BUCKET"
+      name: ":lava_bucket: #ff5d73&lADMIN ACTIONS"
+      lore:
+        - "#ffffffOpen admin moderation for this order"
+        - "{refund_line}"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.manage-order.admin-actions"

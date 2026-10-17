@@ -4,6 +4,19 @@ prefix: ":chest_minecart: {theme}FoOrders &8» #a7b8b0"
 
 tokens:
   theme: "#03fc88"
+  muted: "#a7b8b0"
+  white: "#ffffff"
+  yellow: "#ffd966"
+  good: "#3ecf8e"
+  bad: "#ff5d73"
+
+# Number formatting for GUI values and player messages. Currency symbols remain
+# in the editable message/GUI templates, not in these numeric values.
+numbers:
+  locale: "en-US"
+  plain-pattern: "0.##"
+  compact-pattern: "0.00"
+  compact-suffixes: ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td"]
 
 general:
   only-players: "{prefix}Only players can use this command."
@@ -23,16 +36,19 @@ admin:
   player-not-found: "{prefix}Player not found: {theme}{player}"
 
 chat-input:
-  targets:
-    amount: "the Amount"
-    price: "the Price"
-    search: "the Search"
+  unavailable: "{prefix}#ff5d73Input is unavailable. Please ask an admin to check the dialog settings."
 
 native-dialogs:
   fallback: "{prefix}#ff5d73Native dialogs are not supported on this server. #a7b8b0Using chat input fallback."
 
 actionbar:
+  refresh-cooldown: "#ff5d73Please wait before refreshing orders again."
+  action-unavailable: "#ff5d73That action is no longer available."
+  order-busy: "#ff5d73That order is busy. Please try again."
+  inventory-full: "#ff5d73Make room in your inventory before claiming items."
+  no-items-accepted: "#ff5d73No items were accepted for that order."
   invalid-amount: "#ff5d73Invalid amount. Try again."
+  invalid-price: "#ff5d73Invalid price. Try again."
   not-enough-money: "#ff5d73Not enough money. Try again."
   economy-error: "#ff5d73Economy unavailable. Try again later."
   order-cancelled: "#ff5d73Order was cancelled."
@@ -40,6 +56,10 @@ actionbar:
   custom-item-missing: "#ff5d73That custom item no longer exists."
   enchant-required: "#ff5d73Select at least one enchant for books."
   delivering: "#a7b8b0Delivering"
+  delivering-frames:
+    - "#a7b8b0Delivering."
+    - "#a7b8b0Delivering.."
+    - "#a7b8b0Delivering..."
 
 history:
   disabled: "{prefix}#ff5d73History is disabled."

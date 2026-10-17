@@ -3,6 +3,8 @@ package me.foesio.foOrders.dialog;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.util.List;
+
 record EnchantDialogConfig(
     boolean enabled,
     String title,
@@ -11,6 +13,7 @@ record EnchantDialogConfig(
     boolean pause,
     int maxLevelColumns,
     int columns,
+    List<String> actionOrder,
     int itemWidth,
     int itemHeight,
     boolean showItemDecorations,
@@ -41,15 +44,39 @@ record EnchantDialogConfig(
     private static final Button DEFAULT_SPACER_BUTTON = new Button(" ", "", 1, "");
 
     static EnchantDialogConfig load(FileConfiguration config) {
+        boolean complete = config.isBoolean("enabled") && config.isString("title")
+            && config.isBoolean("can-close-with-escape") && config.isBoolean("pause")
+            && hasIntInRange(config, "max-level-columns", 1, 10)
+            && hasIntInRange(config, "columns", 2, 12)
+            && validActionOrder(config.getStringList("action-order"))
+            && hasIntInRange(config, "item.width", 1, 256)
+            && hasIntInRange(config, "item.height", 1, 256)
+            && config.isBoolean("item.show-decorations") && config.isBoolean("item.show-tooltip")
+            && config.isString("enchant-button.label")
+            && hasIntInRange(config, "enchant-button.width", 1, 1024)
+            && config.isString("level-button.label")
+            && hasIntInRange(config, "level-button.width", 1, 1024)
+            && config.isString("spacer-button.label")
+            && hasIntInRange(config, "spacer-button.width", 1, 1024);
+        List<String> actionOrder = config.getStringList("action-order");
+        if (actionOrder.contains("back")) {
+            complete &= config.isString("back-button.label")
+                && hasIntInRange(config, "back-button.width", 1, 1024);
+        }
+        if (actionOrder.contains("continue")) {
+            complete &= config.isString("continue-button.label")
+                && hasIntInRange(config, "continue-button.width", 1, 1024);
+        }
         int maxLevelColumns = clamp(config.getInt("max-level-columns", 5), 1, 10);
         return new EnchantDialogConfig(
-            config.getBoolean("enabled", true),
-            config.getString("title", "Choose Enchantments"),
-            config.getString("title-icon", "experience_bottle"),
+            complete && config.getBoolean("enabled"),
+            config.getString("title", ""),
+            config.getString("title-icon", ""),
             config.getBoolean("can-close-with-escape", true),
             config.getBoolean("pause", false),
             maxLevelColumns,
             clamp(config.getInt("columns", maxLevelColumns + 1), 2, 12),
+            List.copyOf(actionOrder),
             clamp(config.getInt("item.width", 16), 1, 256),
             clamp(config.getInt("item.height", 16), 1, 256),
             config.getBoolean("item.show-decorations", true),
@@ -67,12 +94,12 @@ record EnchantDialogConfig(
             return DEFAULT_ENCHANT_BUTTON;
         }
         return new EnchantButton(
-            section.getString("label", DEFAULT_ENCHANT_BUTTON.label()),
-            section.getString("tooltip", DEFAULT_ENCHANT_BUTTON.tooltip()),
+            section.getString("label", ""),
+            section.getString("tooltip", ""),
             clamp(section.getInt("width", DEFAULT_ENCHANT_BUTTON.width()), 1, 1024),
-            section.getString("color", DEFAULT_ENCHANT_BUTTON.color()),
-            section.getString("selected-color", DEFAULT_ENCHANT_BUTTON.selectedColor()),
-            section.getString("curse-color", DEFAULT_ENCHANT_BUTTON.curseColor())
+            section.getString("color", ""),
+            section.getString("selected-color", ""),
+            section.getString("curse-color", "")
         );
     }
 
@@ -81,11 +108,11 @@ record EnchantDialogConfig(
             return DEFAULT_LEVEL_BUTTON;
         }
         return new LevelButton(
-            section.getString("label", DEFAULT_LEVEL_BUTTON.label()),
-            section.getString("tooltip", DEFAULT_LEVEL_BUTTON.tooltip()),
+            section.getString("label", ""),
+            section.getString("tooltip", ""),
             clamp(section.getInt("width", DEFAULT_LEVEL_BUTTON.width()), 1, 1024),
-            section.getString("color", DEFAULT_LEVEL_BUTTON.color()),
-            section.getString("selected-color", DEFAULT_LEVEL_BUTTON.selectedColor())
+            section.getString("color", ""),
+            section.getString("selected-color", "")
         );
     }
 
@@ -94,15 +121,25 @@ record EnchantDialogConfig(
             return fallback;
         }
         return new Button(
-            section.getString("label", fallback.label()),
-            section.getString("tooltip", fallback.tooltip()),
+            section.getString("label", ""),
+            section.getString("tooltip", ""),
             clamp(section.getInt("width", fallback.width()), 1, 1024),
-            section.getString("icon", fallback.icon())
+            section.getString("icon", "")
         );
     }
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static boolean validActionOrder(List<String> order) {
+        return !order.isEmpty() && order.size() <= 2
+            && order.stream().allMatch(id -> "back".equals(id) || "continue".equals(id))
+            && order.stream().distinct().count() == order.size();
+    }
+
+    private static boolean hasIntInRange(FileConfiguration config, String path, int min, int max) {
+        return config.isInt(path) && config.getInt(path) >= min && config.getInt(path) <= max;
     }
 
     record EnchantButton(

@@ -1,0 +1,19 @@
+# Public manage-order menu.
+title: "&8ᴍᴀɴᴀɢᴇ ᴏʀᴅᴇʀ"
+
+items:
+  cancel:
+    slot: 11
+    material: RED_TERRACOTTA
+    name: "#ff5d73&lCANCEL"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCancel this order."
+      - " "
+      - "{good}→ Click to Cancel ←"
+  claim:
+    slot: 14
+    material: CHEST
+    name: "#3ecf8e&lCLAIM ORDER"

@@ -111,6 +111,7 @@ gui.sort:
   category: MASTER
   volume: 0.55
   pitch: 0.65
+  pitch-variation: 0.04
 
 gui.filter:
   enabled: true
@@ -118,6 +119,7 @@ gui.filter:
   category: MASTER
   volume: 0.55
   pitch: 0.85
+  pitch-variation: 0.04
 
 gui.refresh:
   enabled: true
@@ -167,6 +169,7 @@ gui.cycle:
   category: MASTER
   volume: 0.65
   pitch: 0.5
+  pitch-variation: 0.04
 
 gui.confirm:
   enabled: true
@@ -293,6 +296,7 @@ orders.claimed:
   category: PLAYERS
   volume: 0.35
   pitch: 1.0
+  pitch-variation: 0.06
 
 orders.claimed-drop:
   enabled: true

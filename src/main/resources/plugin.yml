@@ -10,8 +10,6 @@ commands:
     description: Opens the orders menu
     aliases: [ orders ]
     usage: /order [<search>]
-    permission: foorders.use
-    permission-message: You do not have permission to use FoOrders.
   orderadmin:
     description: Admin command for FoOrders
     aliases: [ ordersadmin ]

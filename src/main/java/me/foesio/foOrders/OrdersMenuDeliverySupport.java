@@ -20,6 +20,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -156,10 +157,6 @@ final class OrdersMenuDeliverySupport {
         return manager.itemSupport.formatCompactAmount(value);
     }
 
-    private int guiItemSlot(String path, int fallback, int inventorySize) {
-        return manager.guis().itemSlot(path, fallback, inventorySize);
-    }
-
     private ItemStack createOrderStack(PlayerDataStore.OrderEntry order, int amount) {
         return manager.itemSupport.createOrderStack(order, amount);
     }
@@ -171,31 +168,26 @@ final class OrdersMenuDeliverySupport {
         PlayerDataStore.OrderEntry selectedOrder = getSelectedOrder(playerData, viewState);
         if (selectedOrder == null) {
             manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
             openYourOrdersMenu(player);
             return;
         }
         List<Integer> claimSessionStacks = initializeClaimSessionStacks(viewState, selectedOrder, false);
 
-        int inventorySize = 54;
-        int backSlot = guiItemSlot("claim-order.previous-page", CLAIM_BACK_SLOT, inventorySize);
-        int returnSlot = guiItemSlot("claim-order.back", CLAIM_RETURN_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("claim-order.next-page", CLAIM_NEXT_SLOT, inventorySize);
-        int dropPageSlot = guiItemSlot("claim-order.drop-page", CLAIM_DROP_PAGE_SLOT, inventorySize);
+        List<Integer> contentSlots = manager.guis().contentSlots("claim-order", "content-slots");
+        int backSlot = manager.guis().activeControlSlot("claim-order.previous-page");
+        int nextSlot = manager.guis().activeControlSlot("claim-order.next-page");
+        int dropPageSlot = manager.guis().activeControlSlot("claim-order.drop-page");
 
-        if (rawSlot == returnSlot) {
-            manager.playSound(player, GUI_BACK_SOUND);
-            player.closeInventory();
-            return;
-        }
-
-        if (rawSlot == backSlot && viewState.claimPage > 1) {
+        if (rawSlot == backSlot && viewState.claimPage > 1
+            && manager.guis().buttonEnabled("claim-order", "previous-page")) {
             viewState.claimPage--;
             manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openClaimOrderMenu(player, false);
             return;
         }
 
-        if (rawSlot == nextSlot) {
+        if (rawSlot == nextSlot && manager.guis().buttonEnabled("claim-order", "next-page")) {
             int pageCount = calculateClaimSessionPageCount(claimSessionStacks);
             if (viewState.claimPage < pageCount) {
                 viewState.claimPage++;
@@ -210,12 +202,15 @@ final class OrdersMenuDeliverySupport {
             return;
         }
 
-        if (rawSlot < 0 || rawSlot >= CLAIM_PAGE_CAPACITY || clickedItem == null || clickedItem.getType() == Material.AIR) {
+        int contentIndex = contentSlots.indexOf(rawSlot);
+        if (contentIndex < 0 || clickedItem == null || clickedItem.getType() == Material.AIR) {
             return;
         }
 
         String orderId = selectedOrder.getOrderId();
         if (!tryAcquireOrderOperation(orderId)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-busy"));
             openClaimOrderMenu(player, false);
             return;
         }
@@ -224,20 +219,27 @@ final class OrdersMenuDeliverySupport {
             playerData = playerDataStore.getOrCreate(playerId);
             selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
             if (selectedOrder == null) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openYourOrdersMenu(player);
                 return;
             }
 
             claimSessionStacks = initializeClaimSessionStacks(viewState, selectedOrder, false);
-            int absoluteStackIndex = (viewState.claimPage - 1) * CLAIM_PAGE_CAPACITY + rawSlot;
+            int absoluteStackIndex = (viewState.claimPage - 1) * contentSlots.size() + contentIndex;
             if (absoluteStackIndex < 0 || absoluteStackIndex >= claimSessionStacks.size()) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openClaimOrderMenu(player, false);
                 return;
             }
 
             int availableInSession = Math.max(0, claimSessionStacks.get(absoluteStackIndex));
-            int requestedAmount = Math.min(clickedItem.getAmount(), Math.min(selectedOrder.getAmountClaimable(), availableInSession));
+            int requestedAmount = claimAmountForClick(availableInSession,
+                selectedOrder.getAmountClaimable());
             if (requestedAmount <= 0) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openClaimOrderMenu(player, false);
                 return;
             }
@@ -245,6 +247,7 @@ final class OrdersMenuDeliverySupport {
             int transferred = transferClaimedItemsToPlayer(player, selectedOrder, requestedAmount);
             if (transferred <= 0) {
                 manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.inventory-full"));
                 return;
             }
 
@@ -255,18 +258,15 @@ final class OrdersMenuDeliverySupport {
                 clearClaimSession(viewState);
             }
             playerDataStore.saveUrgent(playerId);
-            appendOrderHistory(
-                playerId,
-                "Order Claimed",
-                "Claimed " + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder) + " (Inventory)"
-            );
+            appendOrderEvent(playerId, "order-claimed-inventory", selectedOrder,
+                TextFormat.placeholders("amount", transferred));
             manager.fileLogger().info(
                 "Player " + player.getName() + " claimed "
                     + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder)
                     + " from order " + selectedOrder.getOrderId() + "."
             );
             sendOrderClaimedWebhook(player, selectedOrder, transferred, "Inventory");
-            manager.playSoundWithPitchVariation(player, ORDER_CLAIMED_SOUND, 0.06f);
+            manager.playSoundWithPitchVariation(player, ORDER_CLAIMED_SOUND);
 
             if (!removed && viewState.manageOrderIndex >= 0) {
                 openClaimOrderMenu(player, false);
@@ -278,18 +278,23 @@ final class OrdersMenuDeliverySupport {
         }
     }
 
+    /** The GUI stack count is presentation; the claim session owns the transfer count. */
+    static int claimAmountForClick(int availableInSession, int claimable) {
+        return Math.max(0, Math.min(availableInSession, claimable));
+    }
+
     void handleDeliveryConfirmClick(Player player, int rawSlot) {
         UUID playerId = player.getUniqueId();
         PendingDeliveryState pending = pendingDeliveries.get(playerId);
         if (pending == null) {
             manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
             openOrdersMenu(player, null);
             return;
         }
 
-        int inventorySize = 27;
-        int cancelSlot = guiItemSlot("delivery-confirm.cancel", DELIVERY_CANCEL_SLOT, inventorySize);
-        int confirmSlot = guiItemSlot("delivery-confirm.confirm", DELIVERY_CONFIRM_SLOT, inventorySize);
+        int cancelSlot = manager.guis().activeControlSlot("delivery-confirm.cancel");
+        int confirmSlot = manager.guis().activeControlSlot("delivery-confirm.confirm");
 
         if (rawSlot == cancelSlot) {
             PendingDeliveryState removed = removePendingDelivery(playerId, pending.orderId());
@@ -345,6 +350,8 @@ final class OrdersMenuDeliverySupport {
 
         if (liveOrder == null || liveOrder.isCancelled() || submittedItems.length == 0) {
             manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get(submittedItems.length == 0
+                ? "actionbar.no-items-accepted" : "actionbar.action-unavailable"));
             returnPendingItems(player, submittedItems);
             openOrdersMenu(player, null);
             return;
@@ -359,6 +366,7 @@ final class OrdersMenuDeliverySupport {
         int acceptedAmount = Math.min(submittedWantedAmount, remainingNeeded);
         if (acceptedAmount <= 0) {
             manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.no-items-accepted"));
         }
 
         double payout = acceptedAmount * liveOrder.getPricePerItem();
@@ -425,17 +433,10 @@ final class OrdersMenuDeliverySupport {
 
             String ownerName = resolvePlayerName(activePending.ownerId());
             String itemName = formatOrderDisplayName(liveOrder);
-            appendOrderHistory(
-                activePending.ownerId(),
-                "Order Delivered",
-                player.getName() + " delivered " + formatCompactAmount(acceptedAmount) + "x " + itemName
-            );
-            appendDeliverHistory(
-                delivererId,
-                "Delivery Completed",
-                "Delivered " + formatCompactAmount(acceptedAmount) + "x " + itemName
-                    + " to " + ownerName + " and earned $" + formatCompactAmount(payout)
-            );
+            appendOrderEvent(activePending.ownerId(), "order-delivered", liveOrder,
+                TextFormat.placeholders("actor", player.getName(), "amount", acceptedAmount));
+            appendDeliverEvent(delivererId, "delivery-completed", liveOrder,
+                TextFormat.placeholders("amount", acceptedAmount, "owner", ownerName, "payout", payout));
             manager.fileLogger().info(
                 "Player " + player.getName() + " delivered "
                     + formatCompactAmount(acceptedAmount) + "x " + itemName
@@ -573,6 +574,7 @@ final class OrdersMenuDeliverySupport {
     ) {
         String orderId = selectedOrder.getOrderId();
         if (!tryAcquireOrderOperation(orderId)) {
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-busy"));
             openManageOrderMenu(player, viewState.manageOrderIndex);
             return;
         }
@@ -581,10 +583,12 @@ final class OrdersMenuDeliverySupport {
             playerData = playerDataStore.getOrCreate(player.getUniqueId());
             selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
             if (selectedOrder == null) {
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openYourOrdersMenu(player);
                 return;
             }
             if (selectedOrder.isCancelled()) {
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openManageOrderMenu(player, viewState.manageOrderIndex);
                 return;
             }
@@ -598,11 +602,8 @@ final class OrdersMenuDeliverySupport {
             selectedOrder.setCancelled(true);
             sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
             manager.messages().send(player, "orders.cancelled");
-            appendOrderHistory(
-                player.getUniqueId(),
-                "Order Cancelled",
-                formatOrderDisplayName(selectedOrder) + " refunded $" + formatCompactAmount(refundedAmount)
-            );
+            appendOrderEvent(player.getUniqueId(), "order-cancelled", selectedOrder,
+                TextFormat.placeholders("refund", refundedAmount));
             manager.fileLogger().info(
                 "Player " + player.getName() + " cancelled order " + selectedOrder.getOrderId()
                     + " with refund $" + formatCompactAmount(refundedAmount) + "."
@@ -654,11 +655,8 @@ final class OrdersMenuDeliverySupport {
             String ownerName = resolvePlayerName(target.ownerId());
             String orderName = formatOrderDisplayName(target.order());
             playerDataStore.saveUrgent(target.ownerId());
-            appendOrderHistory(
-                target.ownerId(),
-                "Order Deleted by Admin",
-                player.getName() + " deleted " + orderName + " (Refund $" + formatCompactAmount(remainingFunds) + ")"
-            );
+            appendOrderEvent(target.ownerId(), "order-deleted-admin", target.order(),
+                TextFormat.placeholders("actor", player.getName(), "refund", remainingFunds));
             manager.fileLogger().info(
                 "Admin " + player.getName() + " deleted order " + target.order().getOrderId()
                     + " owned by " + ownerName
@@ -721,11 +719,8 @@ final class OrdersMenuDeliverySupport {
 
             String ownerName = resolvePlayerName(target.ownerId());
             String orderName = formatOrderDisplayName(target.order());
-            appendOrderHistory(
-                target.ownerId(),
-                "Order Cancelled by Admin",
-                player.getName() + " cancelled " + orderName + " (Refund $" + formatCompactAmount(remainingFunds) + ")"
-            );
+            appendOrderEvent(target.ownerId(), "order-cancelled-admin", target.order(),
+                TextFormat.placeholders("actor", player.getName(), "refund", remainingFunds));
             manager.fileLogger().info(
                 "Admin " + player.getName() + " cancelled order " + target.order().getOrderId()
                     + " owned by " + ownerName
@@ -781,13 +776,13 @@ final class OrdersMenuDeliverySupport {
             return;
         }
 
-        Bukkit.broadcast(manager.messages().get("orders.created-broadcast", Map.of(
+        manager.messages().broadcast("orders.created-broadcast", Map.of(
             "player", player.getName(),
             "amount", formatCompactAmount(order.getAmountOrdered()),
             "item", formatOrderDisplayName(order),
             "price", formatCompactAmount(order.getPricePerItem()),
             "total", formatCompactAmount(totalCost)
-        )), CREATED_ORDER_ANNOUNCEMENTS_PERMISSION);
+        ), CREATED_ORDER_ANNOUNCEMENTS_PERMISSION);
     }
 
     void sendOrderCancelledWebhook(Player player, PlayerDataStore.OrderEntry order, double refundedAmount) {
@@ -989,6 +984,26 @@ final class OrdersMenuDeliverySupport {
         historyDataStore.appendDeliverHistory(playerId, action, details);
     }
 
+    void appendOrderEvent(UUID playerId, String eventKey, PlayerDataStore.OrderEntry order,
+                          Map<String, String> extraValues) {
+        if (!manager.historyEnabled) {
+            return;
+        }
+        Map<String, String> values = new LinkedHashMap<>(manager.itemSupport.historyItemValues(order));
+        values.putAll(extraValues);
+        historyDataStore.appendOrderEvent(playerId, eventKey, values);
+    }
+
+    void appendDeliverEvent(UUID playerId, String eventKey, PlayerDataStore.OrderEntry order,
+                            Map<String, String> extraValues) {
+        if (!manager.historyEnabled) {
+            return;
+        }
+        Map<String, String> values = new LinkedHashMap<>(manager.itemSupport.historyItemValues(order));
+        values.putAll(extraValues);
+        historyDataStore.appendDeliverEvent(playerId, eventKey, values);
+    }
+
     boolean canOpenOwnHistory(Player player) {
         return manager.historyEnabled && (manager.historyPlayersCanViewOwn || canOpenAnyHistory(player));
     }
@@ -1025,6 +1040,8 @@ final class OrdersMenuDeliverySupport {
     ) {
         String orderId = selectedOrder.getOrderId();
         if (!tryAcquireOrderOperation(orderId)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-busy"));
             openClaimOrderMenu(player, false);
             return;
         }
@@ -1033,14 +1050,19 @@ final class OrdersMenuDeliverySupport {
             playerData = playerDataStore.getOrCreate(player.getUniqueId());
             selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
             if (selectedOrder == null) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openYourOrdersMenu(player);
                 return;
             }
 
             claimSessionStacks = initializeClaimSessionStacks(viewState, selectedOrder, false);
-            int startIndex = (viewState.claimPage - 1) * CLAIM_PAGE_CAPACITY;
-            int endIndex = Math.min(claimSessionStacks.size(), startIndex + CLAIM_PAGE_CAPACITY);
+            int pageCapacity = claimPageCapacity();
+            int startIndex = (viewState.claimPage - 1) * pageCapacity;
+            int endIndex = Math.min(claimSessionStacks.size(), startIndex + pageCapacity);
             if (startIndex < 0 || startIndex >= endIndex) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openClaimOrderMenu(player, false);
                 return;
             }
@@ -1050,6 +1072,8 @@ final class OrdersMenuDeliverySupport {
                 pageStacks.add(Math.max(0, claimSessionStacks.get(index)));
             }
             if (pageStacks.isEmpty()) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openClaimOrderMenu(player, false);
                 return;
             }
@@ -1065,6 +1089,8 @@ final class OrdersMenuDeliverySupport {
             }
 
             if (droppedAmount <= 0) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                 openClaimOrderMenu(player, false);
                 return;
             }
@@ -1078,11 +1104,8 @@ final class OrdersMenuDeliverySupport {
                 clearClaimSession(viewState);
             }
             playerDataStore.saveUrgent(player.getUniqueId());
-            appendOrderHistory(
-                player.getUniqueId(),
-                "Order Claimed",
-                "Claimed " + formatCompactAmount(droppedAmount) + "x " + formatOrderDisplayName(selectedOrder) + " (Drop Page)"
-            );
+            appendOrderEvent(player.getUniqueId(), "order-claimed-drop", selectedOrder,
+                TextFormat.placeholders("amount", droppedAmount));
             sendOrderClaimedWebhook(player, selectedOrder, droppedAmount, "Drop Page");
             manager.playSound(player, ORDER_CLAIMED_DROP_SOUND);
             dropClaimStacksWithDelay(player, stacksToDrop);
@@ -1128,10 +1151,15 @@ final class OrdersMenuDeliverySupport {
     }
 
     int calculateClaimSessionPageCount(List<Integer> claimSessionStacks) {
-        if (claimSessionStacks.isEmpty()) {
+        int pageCapacity = claimPageCapacity();
+        if (claimSessionStacks.isEmpty() || pageCapacity <= 0) {
             return 1;
         }
-        return Math.max(1, (int) Math.ceil(claimSessionStacks.size() / (double) CLAIM_PAGE_CAPACITY));
+        return Math.max(1, (int) Math.ceil(claimSessionStacks.size() / (double) pageCapacity));
+    }
+
+    private int claimPageCapacity() {
+        return manager.guis().contentSlots("claim-order", "content-slots").size();
     }
 
     List<Integer> getClaimSessionPageStackAmounts(List<Integer> claimSessionStacks, int page) {
@@ -1140,12 +1168,16 @@ final class OrdersMenuDeliverySupport {
         }
 
         int safePage = Math.max(1, page);
-        int startIndex = (safePage - 1) * CLAIM_PAGE_CAPACITY;
+        int pageCapacity = claimPageCapacity();
+        if (pageCapacity <= 0) {
+            return List.of();
+        }
+        int startIndex = (safePage - 1) * pageCapacity;
         if (startIndex >= claimSessionStacks.size()) {
             return List.of();
         }
 
-        int endIndex = Math.min(claimSessionStacks.size(), startIndex + CLAIM_PAGE_CAPACITY);
+        int endIndex = Math.min(claimSessionStacks.size(), startIndex + pageCapacity);
         return new ArrayList<>(claimSessionStacks.subList(startIndex, endIndex));
     }
 
@@ -1337,25 +1369,45 @@ final class OrdersMenuDeliverySupport {
 
     List<String> createManageClaimLore(PlayerDataStore.OrderEntry order) {
         int claimableAmount = Math.max(0, order.getAmountClaimable());
-        if (claimableAmount <= 0) {
+        int maxLoreLines = manager.guis().previewLimit("items.manage-order.claim.max-stack-lines");
+        if (claimableAmount <= 0 || maxLoreLines <= 0) {
             return List.of();
         }
 
         int maxStackSize = Math.max(1, createOrderStack(order, 1).getMaxStackSize());
         List<Integer> stacks = buildClaimSessionStacks(claimableAmount, maxStackSize);
         String itemName = formatOrderDisplayName(order);
-        List<String> lore = new ArrayList<>();
-        int maxLoreLines = 5;
-        int maxStackLines = stacks.size() > maxLoreLines ? maxLoreLines - 1 : maxLoreLines;
-        for (int i = 0; i < Math.min(stacks.size(), maxStackLines); i++) {
-            lore.add(manager.guis().text("items.manage-order.claim.stack-line", LIGHT_GRAY + "- {amount}x {item}",
-                TextFormat.placeholders("amount", formatCompactAmount(stacks.get(i)), "item", itemName)));
-        }
+        return claimPreviewLines(stacks, maxLoreLines,
+            amount -> manager.guis().configuredText("items.manage-order.claim.stack-line",
+                TextFormat.placeholders("amount", formatCompactAmount(amount), "item", itemName)),
+            count -> manager.guis().configuredText("items.manage-order.claim.more-line",
+                TextFormat.placeholders("count", formatCompactAmount(count))));
+    }
 
-        int hiddenStacks = stacks.size() - maxStackLines;
-        if (hiddenStacks > 0) {
-            lore.add(manager.guis().text("items.manage-order.claim.more-line", LIGHT_GRAY + "And {count} more",
-                TextFormat.placeholders("count", formatCompactAmount(hiddenStacks))));
+    static List<String> claimPreviewLines(List<Integer> stacks, int maxLines,
+                                          java.util.function.IntFunction<String> stackLine,
+                                          java.util.function.IntFunction<String> moreLine) {
+        if (stacks == null || stacks.isEmpty() || maxLines <= 0) {
+            return List.of();
+        }
+        List<String> details = new ArrayList<>();
+        for (int stack : stacks) {
+            String line = stackLine.apply(stack);
+            if (line != null && !line.isBlank()) {
+                details.add(line);
+            }
+        }
+        int shown = Math.min(details.size(), maxLines);
+        int hidden = stacks.size() - shown;
+        String summary = hidden > 0 ? moreLine.apply(hidden) : "";
+        if (summary != null && !summary.isBlank() && shown == maxLines) {
+            shown--;
+            hidden++;
+            summary = moreLine.apply(hidden);
+        }
+        List<String> lore = new ArrayList<>(details.subList(0, shown));
+        if (summary != null && !summary.isBlank()) {
+            lore.add(summary);
         }
         return lore;
     }

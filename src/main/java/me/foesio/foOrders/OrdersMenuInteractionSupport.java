@@ -2,11 +2,10 @@ package me.foesio.foOrders;
 
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.gui.EntryBrowserHolder;
+import me.foesio.core.gui.publicgui.PublicGuiInventoryHolder;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -84,17 +83,21 @@ final class OrdersMenuInteractionSupport {
         sendErrorActionbar(player, manager.messages().get("actionbar.invalid-amount"));
     }
 
+    void sendInvalidPriceActionbar(Player player) {
+        sendErrorActionbar(player, manager.messages().get("actionbar.invalid-price"));
+    }
+
     void sendErrorActionbar(Player player, String message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message));
+        if (message != null && !message.isBlank()) {
+            PlayerTextDelivery.sendActionBar(player, message);
+        }
     }
 
     void sendDeliveringActionbar(Player player, int animationStep) {
-        int dots = (animationStep % 3) + 1;
-        StringBuilder message = new StringBuilder(manager.messages().get("actionbar.delivering"));
-        for (int i = 0; i < dots; i++) {
-            message.append('.');
+        String frame = manager.messages().frame("actionbar.delivering-frames", animationStep);
+        if (!frame.isBlank()) {
+            PlayerTextDelivery.sendActionBar(player, frame);
         }
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(message.toString()));
     }
 
     void onInventoryClick(InventoryClickEvent event) {
@@ -140,6 +143,13 @@ final class OrdersMenuInteractionSupport {
         event.setCancelled(true);
         if (!isAdminItemEdit && menuHolder.getGuiRevision() != manager.guis().revision()) {
             reopenStalePublicMenu(player, menuHolder.getMenuType());
+            return;
+        }
+
+        if (menuHolder.getMenuType() != MenuType.ADMIN_ORDER_ACTIONS
+            && menuHolder.getMenuType() != MenuType.ADMIN_ITEM_EDIT
+            && (event.getCurrentItem() == null || event.getCurrentItem().getType().isAir())) {
+            // A removed/disabled public control must not leave a ghost click.
             return;
         }
 
@@ -216,6 +226,10 @@ final class OrdersMenuInteractionSupport {
         clearSearches(playerId);
 
         InventoryHolder holder = topInventory.getHolder();
+        if (holder instanceof PublicGuiInventoryHolder publicHolder) {
+            closePublicMenu(player, playerId, publicHolder.frame().definition().menuId());
+            return;
+        }
         if (holder instanceof EntryBrowserHolder) {
             return;
         }
@@ -377,6 +391,49 @@ final class OrdersMenuInteractionSupport {
                 manager.viewSupport.openYourOrdersMenu(player);
             }
         });
+    }
+
+    private void closePublicMenu(Player player, UUID playerId, String menuId) {
+        switch (menuId) {
+            case "orders.main" -> { }
+            case "orders.your-orders", "orders.history" -> scheduler.runForPlayer(player, () -> {
+                if (player.isOnline()) manager.viewSupport.openOrdersMenu(player, "");
+            });
+            case "orders.item-select" -> {
+                MenuViewState state = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
+                state.draft = state.getOrCreateDraft().withMaterialName(Material.STONE.name());
+                scheduler.runForPlayer(player, () -> {
+                    if (player.isOnline()) manager.viewSupport.openNewOrderMenu(player);
+                });
+            }
+            case "orders.enchant-select" -> scheduler.runForPlayer(player, () -> {
+                if (player.isOnline()) manager.viewSupport.openNewOrderMenu(player);
+            });
+            case "orders.claim-order" -> scheduler.runForPlayer(player, () -> {
+                if (!player.isOnline()) return;
+                MenuViewState state = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
+                deliverySupport.finishClaimSession(playerId, state);
+                if (state.manageOrderIndex >= 0) {
+                    manager.viewSupport.openManageOrderMenu(player, state.manageOrderIndex);
+                } else {
+                    manager.viewSupport.openYourOrdersMenu(player);
+                }
+            });
+            case "orders.delivery-confirm" -> {
+                deliverySupport.returnAndClearPendingDelivery(player, playerId);
+                scheduler.runForPlayer(player, () -> {
+                    if (player.isOnline()) manager.viewSupport.openOrdersMenu(player, null);
+                });
+            }
+            case "orders.new-order" -> scheduler.runForPlayer(player, () -> {
+                if (player.isOnline() && !manager.isOrdersMenu(player.getOpenInventory().getTopInventory())) {
+                    manager.viewSupport.openYourOrdersMenu(player);
+                }
+            });
+            default -> scheduler.runForPlayer(player, () -> {
+                if (player.isOnline()) manager.viewSupport.openYourOrdersMenu(player);
+            });
+        }
     }
 
     private void clearSearches(UUID playerId) {

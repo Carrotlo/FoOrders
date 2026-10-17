@@ -8,6 +8,7 @@ import me.foesio.core.sound.FoEditorSounds;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
+import me.foesio.foOrders.util.TextFormat;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
@@ -56,10 +57,6 @@ final class OrdersMenuActionSupport {
 
     private int calculatePageCount(int totalItems, int pageSize) {
         return manager.viewSupport.calculatePageCount(totalItems, pageSize);
-    }
-
-    private int guiItemSlot(String path, int fallback, int inventorySize) {
-        return manager.guis().itemSlot(path, fallback, inventorySize);
     }
 
     private List<MainOrderView> getVisibleMainOrders(MenuViewState viewState, PlayerDataStore.PlayerData playerData) {
@@ -263,8 +260,8 @@ final class OrdersMenuActionSupport {
         return manager.itemSupport.resolveMaterial(materialName);
     }
 
-    private List<org.bukkit.enchantments.Enchantment> getSelectableEnchantments(Material material) {
-        return manager.itemSupport.getSelectableEnchantments(material);
+    private List<org.bukkit.enchantments.Enchantment> getVisibleInventoryEnchantments(Material material) {
+        return manager.itemSupport.getVisibleInventoryEnchantments(material);
     }
 
     private String formatCompactAmount(double value) {
@@ -287,8 +284,9 @@ final class OrdersMenuActionSupport {
         return deliverySupport.withdrawEconomy(player, amount);
     }
 
-    private void appendOrderHistory(UUID playerId, String action, String details) {
-        deliverySupport.appendOrderHistory(playerId, action, details);
+    private void appendOrderEvent(UUID playerId, String eventKey, PlayerDataStore.OrderEntry order,
+                                  Map<String, String> values) {
+        deliverySupport.appendOrderEvent(playerId, eventKey, order, values);
     }
 
     private void sendOrderCreatedWebhook(Player player, PlayerDataStore.OrderEntry order, double totalCost) {
@@ -345,20 +343,20 @@ final class OrdersMenuActionSupport {
         UUID playerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
-        int inventorySize = 54;
-        int sortSlot = manager.guis().itemSlot("main.sort", SORT_SLOT, inventorySize);
-        int filterSlot = manager.guis().itemSlot("main.filter", FILTER_SLOT, inventorySize);
-        int refreshSlot = manager.guis().itemSlot("main.refresh", REFRESH_SLOT, inventorySize);
-        int searchSlot = manager.guis().itemSlot("main.search", SEARCH_SLOT, inventorySize);
-        int mainBackSlot = manager.guis().itemSlot("main.previous-page", MAIN_BACK_SLOT, inventorySize);
-        int mainNextSlot = manager.guis().itemSlot("main.next-page", MAIN_NEXT_SLOT, inventorySize);
-        int yourOrdersSlot = manager.guis().itemSlot("main.your-orders", YOUR_ORDERS_SLOT, inventorySize);
-        int historySlot = manager.guis().itemSlot("main.history", HISTORY_SLOT, inventorySize);
-        List<Integer> orderSlots = manager.guis().slots("layout.main.order-slots", MAIN_ORDER_SLOTS, inventorySize);
+        int inventorySize = manager.guis().size("main");
+        int sortSlot = manager.guis().activeControlSlot("main.sort");
+        int filterSlot = manager.guis().activeControlSlot("main.filter");
+        int refreshSlot = manager.guis().activeControlSlot("main.refresh");
+        int searchSlot = manager.guis().activeControlSlot("main.search");
+        int mainBackSlot = manager.guis().activeControlSlot("main.previous-page");
+        int mainNextSlot = manager.guis().activeControlSlot("main.next-page");
+        int yourOrdersSlot = manager.guis().activeControlSlot("main.your-orders");
+        int historySlot = manager.guis().activeControlSlot("main.history");
+        List<Integer> orderSlots = manager.guis().contentSlots("main", "order-slots");
 
         if (rawSlot == sortSlot) {
             viewState.mainSortIndex = (viewState.mainSortIndex + 1) % SORT_OPTIONS.size();
-            manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND, 0.04f);
+            manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND);
             viewState.page = 1;
             refreshMainMenuDebounced(player);
             return;
@@ -366,7 +364,7 @@ final class OrdersMenuActionSupport {
 
         if (rawSlot == filterSlot) {
             viewState.mainFilterIndex = (viewState.mainFilterIndex + 1) % FILTER_OPTIONS.size();
-            manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND, 0.04f);
+            manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND);
             viewState.page = 1;
             refreshMainMenuDebounced(player);
             return;
@@ -376,24 +374,27 @@ final class OrdersMenuActionSupport {
             if (manager.tryMarkOrderMenuRefresh(player)) {
                 manager.playSound(player, GUI_REFRESH_SOUND);
                 refreshMainMenu(player);
+            } else {
+                manager.notifyRefreshCooldown(player);
             }
             return;
         }
 
-        if (rawSlot == searchSlot) {
+        if (rawSlot == searchSlot && manager.guis().buttonEnabled("main", "search")) {
             manager.playSound(player, GUI_SEARCH_SOUND);
             openSignInput(player, SignInputType.MAIN_SEARCH);
             return;
         }
 
-        if (rawSlot == mainBackSlot && viewState.page > 1) {
+        if (rawSlot == mainBackSlot && viewState.page > 1
+            && manager.guis().buttonEnabled("main", "previous-page")) {
             viewState.page--;
             manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             refreshMainMenu(player);
             return;
         }
 
-        if (rawSlot == mainNextSlot) {
+        if (rawSlot == mainNextSlot && manager.guis().buttonEnabled("main", "next-page")) {
             int pageCount = calculatePageCount(getCachedVisibleMainOrders(viewState, playerData).size(), orderSlots.size());
             if (viewState.page < pageCount) {
                 viewState.page++;
@@ -416,6 +417,9 @@ final class OrdersMenuActionSupport {
             return;
         }
 
+        if (!manager.guis().itemEnabled("main.order-entry")) {
+            return;
+        }
         int orderSlotIndex = orderSlots.indexOf(rawSlot);
         if (orderSlotIndex >= 0) {
             int orderIndex = (viewState.page - 1) * orderSlots.size() + orderSlotIndex;
@@ -437,6 +441,8 @@ final class OrdersMenuActionSupport {
                     viewState.claimPage = 1;
                     openManageOrderMenu(player, ownOrderIndex);
                 } else {
+                    manager.playSound(player, GUI_ERROR_SOUND);
+                    sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
                     openYourOrdersMenu(player);
                 }
                 return;
@@ -451,7 +457,7 @@ final class OrdersMenuActionSupport {
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         int playerMaxOrders = getMaxOrdersForPlayer(player);
-        int newOrderSlot = guiItemSlot("your-orders.new-order", Math.min(playerData.getOrders().size(), playerMaxOrders), 27);
+        int newOrderSlot = manager.guis().activeControlSlot("your-orders.new-order");
         List<Integer> orderSlots = manager.viewSupport.yourOrderSlots(newOrderSlot);
         int displayCount = Math.min(playerData.getOrders().size(), Math.min(playerMaxOrders, orderSlots.size()));
 
@@ -465,6 +471,9 @@ final class OrdersMenuActionSupport {
             return;
         }
 
+        if (!manager.guis().itemEnabled("your-orders.order-entry")) {
+            return;
+        }
         int orderSlotIndex = orderSlots.indexOf(rawSlot);
         if (orderSlotIndex >= 0 && orderSlotIndex < displayCount) {
             viewState.manageOrderIndex = orderSlotIndex;
@@ -487,13 +496,12 @@ final class OrdersMenuActionSupport {
     }
 
     void handleNewOrderClick(Player player, int rawSlot) {
-        int inventorySize = 27;
-        int cancelSlot = guiItemSlot("new-order.cancel", CANCEL_SLOT, inventorySize);
-        int itemSlot = guiItemSlot("new-order.item", ITEM_SLOT, inventorySize);
-        int amountSlot = guiItemSlot("new-order.amount", AMOUNT_SLOT, inventorySize);
-        int priceSlot = guiItemSlot("new-order.price", PRICE_SLOT, inventorySize);
-        int enchantSlot = guiItemSlot("new-order.enchants", ENCHANT_SLOT, inventorySize);
-        int confirmSlot = guiItemSlot("new-order.confirm", CONFIRM_SLOT, inventorySize);
+        int cancelSlot = manager.guis().activeControlSlot("new-order.cancel");
+        int itemSlot = manager.guis().activeControlSlot("new-order.item");
+        int amountSlot = manager.guis().activeControlSlot("new-order.amount");
+        int priceSlot = manager.guis().activeControlSlot("new-order.price");
+        int enchantSlot = manager.guis().activeControlSlot("new-order.enchants");
+        int confirmSlot = manager.guis().activeControlSlot("new-order.confirm");
 
         if (rawSlot == cancelSlot) {
             openYourOrdersMenu(player, GUI_BACK_SOUND);
@@ -520,6 +528,9 @@ final class OrdersMenuActionSupport {
         if (rawSlot == enchantSlot) {
             NewOrderDraft draft = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState()).getOrCreateDraft();
             if (!supportsOrderEnchantments(draft.customItemId(), resolveDraftMaterial(draft))) {
+                manager.playSound(player, GUI_ERROR_SOUND);
+                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
+                openNewOrderMenu(player);
                 return;
             }
             manager.playSound(player, GUI_CLICK_SOUND);
@@ -539,13 +550,13 @@ final class OrdersMenuActionSupport {
         PlayerDataStore.OrderEntry selectedOrder = getSelectedOrder(playerData, viewState);
         if (selectedOrder == null) {
             manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
             openYourOrdersMenu(player);
             return;
         }
 
-        int inventorySize = 27;
-        int cancelSlot = guiItemSlot("manage-order.cancel", MANAGE_CANCEL_SLOT, inventorySize);
-        int claimSlot = guiItemSlot("manage-order.claim", MANAGE_CLAIM_SLOT, inventorySize);
+        int cancelSlot = manager.guis().activeControlSlot("manage-order.cancel");
+        int claimSlot = manager.guis().activeControlSlot("manage-order.claim");
 
         if (rawSlot == cancelSlot && !selectedOrder.isCancelled()) {
             handleOrderCancellation(player, playerData, viewState, selectedOrder);
@@ -557,7 +568,7 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        if (rawSlot == MANAGE_ADMIN_ACTIONS_SLOT && canModerateOrders(player)) {
+        if (rawSlot == manager.guis().activeControlSlot("manage-order.admin-actions") && canModerateOrders(player)) {
             manager.playSound(player, GUI_CLICK_SOUND);
             openAdminOrderActionsMenu(player, playerId, selectedOrder.getOrderId());
         }
@@ -833,23 +844,24 @@ final class OrdersMenuActionSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(viewerId, ignored -> new MenuViewState());
         UUID targetId = viewState.historyTargetId == null ? viewerId : viewState.historyTargetId;
         if (!canAccessHistory(player, targetId)) {
+            manager.viewSupport.notifyHistoryUnavailable(player, targetId, false);
             openOrdersMenu(player, null);
             return;
         }
 
-        int inventorySize = 54;
-        int orderTabSlot = guiItemSlot("history.order-tab", HISTORY_ORDER_TAB_SLOT, inventorySize);
-        int deliverTabSlot = guiItemSlot("history.deliver-tab", HISTORY_DELIVER_TAB_SLOT, inventorySize);
-        int backToOrdersSlot = guiItemSlot("history.back-to-orders", HISTORY_BACK_TO_ORDERS_SLOT, inventorySize);
-        int backSlot = guiItemSlot("history.previous-page", HISTORY_BACK_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("history.next-page", HISTORY_NEXT_SLOT, inventorySize);
+        int orderTabSlot = manager.guis().activeControlSlot("history.order-tab");
+        int deliverTabSlot = manager.guis().activeControlSlot("history.deliver-tab");
+        int backToOrdersSlot = manager.guis().activeControlSlot("history.back-to-orders");
+        int backSlot = manager.guis().activeControlSlot("history.previous-page");
+        int nextSlot = manager.guis().activeControlSlot("history.next-page");
 
-        if (rawSlot == backToOrdersSlot) {
+        if (rawSlot == backToOrdersSlot && manager.guis().buttonEnabled("history", "back")) {
             openOrdersMenu(player, null, GUI_BACK_SOUND);
             return;
         }
 
-        if (rawSlot == orderTabSlot && viewState.historyType != HistoryDataStore.HistoryType.ORDER) {
+        if (rawSlot == orderTabSlot && viewState.historyType != HistoryDataStore.HistoryType.ORDER
+            && manager.guis().stateMaterial("history.order-tab", false) != null) {
             viewState.historyType = HistoryDataStore.HistoryType.ORDER;
             viewState.historyPage = 1;
             manager.playSound(player, GUI_SELECT_SOUND);
@@ -857,7 +869,8 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        if (rawSlot == deliverTabSlot && viewState.historyType != HistoryDataStore.HistoryType.DELIVER) {
+        if (rawSlot == deliverTabSlot && viewState.historyType != HistoryDataStore.HistoryType.DELIVER
+            && manager.guis().stateMaterial("history.deliver-tab", false) != null) {
             viewState.historyType = HistoryDataStore.HistoryType.DELIVER;
             viewState.historyPage = 1;
             manager.playSound(player, GUI_SELECT_SOUND);
@@ -865,18 +878,21 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        if (rawSlot == backSlot && viewState.historyPage > 1) {
+        if (rawSlot == backSlot && viewState.historyPage > 1
+            && manager.guis().buttonEnabled("history", "previous-page")) {
             viewState.historyPage--;
             manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openHistoryMenu(player, false);
             return;
         }
 
-        if (rawSlot == nextSlot) {
+        if (rawSlot == nextSlot && manager.guis().buttonEnabled("history", "next-page")) {
             List<HistoryDataStore.HistoryEntry> entries = viewState.historyType == HistoryDataStore.HistoryType.DELIVER
                 ? historyDataStore.getDeliverHistory(targetId)
                 : historyDataStore.getOrderHistory(targetId);
-            int pageCount = calculatePageCount(entries.size(), HISTORY_PAGE_CAPACITY);
+            String entryState = viewState.historyType == HistoryDataStore.HistoryType.DELIVER ? "deliver" : "order";
+            int pageCount = !manager.guis().sourceEntryStateEnabled("history.entry", entryState) ? 1
+                : calculatePageCount(entries.size(), manager.guis().contentSlots("history", "content-slots").size());
             if (viewState.historyPage < pageCount) {
                 viewState.historyPage++;
                 manager.playSound(player, GUI_PAGE_NEXT_SOUND);
@@ -889,18 +905,18 @@ final class OrdersMenuActionSupport {
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
         ItemSelectState itemSelectState = viewState.getOrCreateItemSelectState();
 
-        int inventorySize = 54;
-        int sortSlot = guiItemSlot("item-select.sort", ITEM_SELECT_SORT_SLOT, inventorySize);
-        int filterSlot = guiItemSlot("item-select.filter", ITEM_SELECT_FILTER_SLOT, inventorySize);
-        int searchSlot = guiItemSlot("item-select.search", ITEM_SELECT_SEARCH_SLOT, inventorySize);
-        int backSlot = guiItemSlot("item-select.previous-page", ITEM_SELECT_BACK_SLOT, inventorySize);
-        int returnSlot = guiItemSlot("item-select.back", ITEM_SELECT_RETURN_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("item-select.next-page", ITEM_SELECT_NEXT_SLOT, inventorySize);
+        List<Integer> contentSlots = manager.guis().contentSlots("item-select", "content-slots");
+        int sortSlot = manager.guis().activeControlSlot("item-select.sort");
+        int filterSlot = manager.guis().activeControlSlot("item-select.filter");
+        int searchSlot = manager.guis().activeControlSlot("item-select.search");
+        int backSlot = manager.guis().activeControlSlot("item-select.previous-page");
+        int returnSlot = manager.guis().activeControlSlot("item-select.back");
+        int nextSlot = manager.guis().activeControlSlot("item-select.next-page");
 
         if (rawSlot == sortSlot) {
             itemSelectState.sortIndex = (itemSelectState.sortIndex + 1) % ITEM_SORT_OPTIONS.size();
             itemSelectState.page = 1;
-            manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND, 0.04f);
+            manager.playSoundWithPitchVariation(player, GUI_SORT_SOUND);
             refreshItemSelectMenuDebounced(player);
             return;
         }
@@ -908,31 +924,32 @@ final class OrdersMenuActionSupport {
         if (rawSlot == filterSlot) {
             itemSelectState.filterIndex = (itemSelectState.filterIndex + 1) % FILTER_OPTIONS.size();
             itemSelectState.page = 1;
-            manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND, 0.04f);
+            manager.playSoundWithPitchVariation(player, GUI_FILTER_SOUND);
             refreshItemSelectMenuDebounced(player);
             return;
         }
 
-        if (rawSlot == searchSlot) {
+        if (rawSlot == searchSlot && manager.guis().buttonEnabled("item-select", "search")) {
             manager.playSound(player, GUI_SEARCH_SOUND);
             openSignInput(player, SignInputType.ITEM_SEARCH);
             return;
         }
 
-        if (rawSlot == returnSlot) {
+        if (rawSlot == returnSlot && manager.guis().buttonEnabled("item-select", "back")) {
             openNewOrderMenu(player, GUI_BACK_SOUND);
             return;
         }
 
-        if (rawSlot == backSlot && itemSelectState.page > 1) {
+        if (rawSlot == backSlot && itemSelectState.page > 1
+            && manager.guis().buttonEnabled("item-select", "previous-page")) {
             itemSelectState.page--;
             manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openItemSelectMenu(player, false);
             return;
         }
 
-        if (rawSlot == nextSlot) {
-            int pageCount = Math.max(1, (int) Math.ceil(getFilteredSortedItems(itemSelectState).size() / (double) ITEM_SELECT_PAGE_SIZE));
+        if (rawSlot == nextSlot && manager.guis().buttonEnabled("item-select", "next-page")) {
+            int pageCount = calculatePageCount(getFilteredSortedItems(itemSelectState).size(), contentSlots.size());
             if (itemSelectState.page < pageCount) {
                 itemSelectState.page++;
                 manager.playSound(player, GUI_PAGE_NEXT_SOUND);
@@ -941,9 +958,10 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        if (rawSlot >= 0 && rawSlot < ITEM_SELECT_PAGE_SIZE) {
+        int contentIndex = contentSlots.indexOf(rawSlot);
+        if (contentIndex >= 0) {
             List<OrderableItemOption> items = getFilteredSortedItems(itemSelectState);
-            int itemIndex = (itemSelectState.page - 1) * ITEM_SELECT_PAGE_SIZE + rawSlot;
+            int itemIndex = (itemSelectState.page - 1) * contentSlots.size() + contentIndex;
             if (itemIndex >= 0 && itemIndex < items.size()) {
                 selectOrderItem(player, viewState, items.get(itemIndex));
             }
@@ -953,10 +971,13 @@ final class OrdersMenuActionSupport {
     private void selectOrderItem(Player player, MenuViewState viewState, OrderableItemOption selected) {
         NewOrderDraft currentDraft = viewState.getOrCreateDraft();
         if (!selected.isCustom() && isOrderBlacklisted(selected.material(), Map.of())) {
+            manager.playSound(player, GUI_ERROR_SOUND);
             sendErrorActionbar(player, manager.messages().get("actionbar.order-blacklisted"));
             openItemSelectMenu(player, false);
             return;
         }
+
+        manager.playSound(player, GUI_SELECT_SOUND);
 
         Map<String, Integer> selectedEnchantments =
             sanitizeDraftEnchantments(selected.customItemId(), selected.material(), currentDraft.enchantLevels());
@@ -979,22 +1000,27 @@ final class OrdersMenuActionSupport {
     }
 
     void handleEnchantSelectClick(Player player, InventoryClickEvent event) {
-        int rawSlot = event.getRawSlot();
+        handleEnchantSelectClick(player, event.getRawSlot(), event.getClick());
+    }
+
+    void handleEnchantSelectClick(Player player, int rawSlot, ClickType click) {
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
         NewOrderDraft draft = viewState.getOrCreateDraft();
         Material material = resolveDraftMaterial(draft);
         if (!supportsOrderEnchantments(draft.customItemId(), material)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
             openNewOrderMenu(player);
             return;
         }
 
-        int inventorySize = 54;
-        int doneSlot = guiItemSlot("enchant-select.done", ENCHANT_SELECT_DONE_SLOT, inventorySize);
-        int clearSlot = guiItemSlot("enchant-select.clear", ENCHANT_SELECT_CLEAR_SLOT, inventorySize);
-        int backSlot = guiItemSlot("enchant-select.previous-page", ENCHANT_SELECT_BACK_SLOT, inventorySize);
-        int returnSlot = guiItemSlot("enchant-select.back", ENCHANT_SELECT_RETURN_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("enchant-select.next-page", ENCHANT_SELECT_NEXT_SLOT, inventorySize);
-        int controlsSlot = guiItemSlot("enchant-select.controls", ENCHANT_SELECT_INFO_SLOT, inventorySize);
+        List<Integer> contentSlots = manager.guis().contentSlots("enchant-select", "content-slots");
+        int doneSlot = manager.guis().activeControlSlot("enchant-select.done");
+        int clearSlot = manager.guis().activeControlSlot("enchant-select.clear");
+        int backSlot = manager.guis().activeControlSlot("enchant-select.previous-page");
+        int returnSlot = manager.guis().activeControlSlot("enchant-select.back");
+        int nextSlot = manager.guis().activeControlSlot("enchant-select.next-page");
+        int controlsSlot = manager.guis().activeControlSlot("enchant-select.controls");
 
         if (rawSlot == doneSlot) {
             openNewOrderMenu(player, GUI_BACK_SOUND);
@@ -1008,21 +1034,22 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        if (rawSlot == returnSlot) {
+        if (rawSlot == returnSlot && manager.guis().buttonEnabled("enchant-select", "back")) {
             manager.playSound(player, GUI_BACK_SOUND);
             openItemSelectMenu(player, false);
             return;
         }
 
-        if (rawSlot == backSlot && viewState.enchantPage > 1) {
+        if (rawSlot == backSlot && viewState.enchantPage > 1
+            && manager.guis().buttonEnabled("enchant-select", "previous-page")) {
             viewState.enchantPage--;
             manager.playSound(player, GUI_PAGE_PREVIOUS_SOUND);
             openEnchantSelectMenu(player, false);
             return;
         }
 
-        if (rawSlot == nextSlot) {
-            int pageCount = Math.max(1, (int) Math.ceil(getSelectableEnchantments(material).size() / (double) ENCHANT_SELECT_PAGE_SIZE));
+        if (rawSlot == nextSlot && manager.guis().buttonEnabled("enchant-select", "next-page")) {
+            int pageCount = calculatePageCount(getVisibleInventoryEnchantments(material).size(), contentSlots.size());
             if (viewState.enchantPage < pageCount) {
                 viewState.enchantPage++;
                 manager.playSound(player, GUI_PAGE_NEXT_SOUND);
@@ -1035,11 +1062,11 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        if (rawSlot < 0 || rawSlot >= ENCHANT_SELECT_PAGE_SIZE) {
+        int contentIndex = contentSlots.indexOf(rawSlot);
+        if (contentIndex < 0) {
             return;
         }
 
-        ClickType click = event.getClick();
         int step = click.isShiftClick() ? 5 : 1;
         int direction;
         if (click.isLeftClick()) {
@@ -1050,13 +1077,19 @@ final class OrdersMenuActionSupport {
             return;
         }
 
-        List<Enchantment> selectable = getSelectableEnchantments(material);
-        int enchantIndex = (viewState.enchantPage - 1) * ENCHANT_SELECT_PAGE_SIZE + rawSlot;
+        List<Enchantment> selectable = getVisibleInventoryEnchantments(material);
+        int enchantIndex = (viewState.enchantPage - 1) * contentSlots.size() + contentIndex;
         if (enchantIndex < 0 || enchantIndex >= selectable.size()) {
             return;
         }
 
         Enchantment selected = selectable.get(enchantIndex);
+        int visibleLevel = sanitizeDraftEnchantments(draft.customItemId(), material, draft.enchantLevels())
+            .getOrDefault(selected.getKey().toString(), 0);
+        if (!manager.guis().sourceEntryStateEnabled("enchant-select.entry",
+            visibleLevel > 0 ? "selected" : "unselected")) {
+            return;
+        }
         int maxLevel = Math.max(1, selected.getMaxLevel());
         Map<String, Integer> updatedEnchantments =
             new LinkedHashMap<>(sanitizeDraftEnchantments(draft.customItemId(), material, draft.enchantLevels()));
@@ -1070,7 +1103,7 @@ final class OrdersMenuActionSupport {
         }
 
         viewState.draft = draft.withEnchantLevels(updatedEnchantments);
-        manager.playSoundWithPitchVariation(player, GUI_CYCLE_SOUND, 0.04f);
+        manager.playSoundWithPitchVariation(player, GUI_CYCLE_SOUND);
         openEnchantSelectMenu(player, false);
     }
 
@@ -1134,7 +1167,7 @@ final class OrdersMenuActionSupport {
         double subtotal = draft.amount() * draft.pricePerItem();
         if (subtotal <= 0 || !Double.isFinite(subtotal)) {
             manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.invalid-amount"));
+            sendErrorActionbar(player, manager.messages().get("actionbar.invalid-price"));
             openNewOrderMenu(player);
             return;
         }
@@ -1142,7 +1175,7 @@ final class OrdersMenuActionSupport {
         double totalCost = manager.calculateOrderCreationCost(subtotal);
         if (totalCost <= 0 || !Double.isFinite(totalCost)) {
             manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.invalid-amount"));
+            sendErrorActionbar(player, manager.messages().get("actionbar.invalid-price"));
             openNewOrderMenu(player);
             return;
         }
@@ -1176,16 +1209,9 @@ final class OrdersMenuActionSupport {
         );
         playerData.getOrders().add(orderEntry);
         playerDataStore.saveUrgent(playerId);
-        appendOrderHistory(
-            playerId,
-            "Order Created",
-            formatCompactAmount(orderEntry.getAmountOrdered())
-                + "x " + formatOrderDisplayName(orderEntry)
-                + " at $" + formatCompactAmount(orderEntry.getPricePerItem())
-                + " each (Subtotal $" + formatCompactAmount(subtotal)
-                + ", Tax $" + formatCompactAmount(taxAmount)
-                + ", Total $" + formatCompactAmount(totalCost) + ")"
-        );
+        appendOrderEvent(playerId, "order-created", orderEntry, TextFormat.placeholders(
+            "amount", orderEntry.getAmountOrdered(), "price", orderEntry.getPricePerItem(),
+            "subtotal", subtotal, "tax", taxAmount, "total", totalCost));
         manager.fileLogger().info(
             "Player " + player.getName() + " created order " + orderEntry.getOrderId()
                 + " for " + formatCompactAmount(orderEntry.getAmountOrdered())

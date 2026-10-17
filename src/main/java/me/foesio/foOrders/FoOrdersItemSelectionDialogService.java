@@ -10,6 +10,8 @@ interface FoOrdersItemSelectionDialogService {
 
     void clearCache();
 
+    void reloadConfig();
+
     void clearPending(UUID playerId);
 
     void clearAllPending();

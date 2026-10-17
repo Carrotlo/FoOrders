@@ -1,0 +1,140 @@
+# Server-wide names and formats inserted into public GUI templates.
+labels:
+  main:
+    main-sort-options:
+    - Most Paid
+    - Most Delivered
+    - Recently Listed
+    - Most Money Per Item
+    filter-options:
+    - All
+    - Blocks
+    - Tools
+    - Food
+    - Combat
+    - Potions
+    - Books
+    - Ingredients
+    - Utilities
+    search-empty: '#a7b8b0None'
+    search-current: '{theme}{search}'
+    item-display:
+      max-enchants: 2
+      enchant-summary: '{item} ({enchants})'
+      enchant-level: '{enchant} {level}'
+      enchant-separator: ', '
+      extra-enchants: +{count}
+  item-select:
+    item-sort-options:
+    - A-Z
+    - Z-A
+    filter-options:
+    - All
+    - Blocks
+    - Tools
+    - Food
+    - Combat
+    - Potions
+    - Books
+    - Ingredients
+    - Utilities
+    material-names: {}
+    enchant-enabled: '#3ecf8eEnabled'
+    enchant-disabled: '#ff5d73Disabled'
+    search-empty: '#a7b8b0None'
+    search-current: '{theme}{search}'
+    unknown-item: Unknown Item
+  enchant-select:
+    none: None
+    enchantment-names:
+      PROTECTION: Protection
+      FIRE_PROTECTION: Fire Protection
+      FEATHER_FALLING: Feather Falling
+      BLAST_PROTECTION: Blast Protection
+      PROJECTILE_PROTECTION: Projectile Protection
+      RESPIRATION: Respiration
+      AQUA_AFFINITY: Aqua Affinity
+      THORNS: Thorns
+      DEPTH_STRIDER: Depth Strider
+      FROST_WALKER: Frost Walker
+      BINDING_CURSE: Binding Curse
+      SHARPNESS: Sharpness
+      SMITE: Smite
+      BANE_OF_ARTHROPODS: Bane Of Arthropods
+      KNOCKBACK: Knockback
+      FIRE_ASPECT: Fire Aspect
+      LOOTING: Looting
+      SWEEPING_EDGE: Sweeping Edge
+      EFFICIENCY: Efficiency
+      SILK_TOUCH: Silk Touch
+      UNBREAKING: Unbreaking
+      FORTUNE: Fortune
+      POWER: Power
+      PUNCH: Punch
+      FLAME: Flame
+      INFINITY: Infinity
+      LUCK_OF_THE_SEA: Luck Of The Sea
+      LURE: Lure
+      LOYALTY: Loyalty
+      IMPALING: Impaling
+      RIPTIDE: Riptide
+      CHANNELING: Channeling
+      MULTISHOT: Multishot
+      QUICK_CHARGE: Quick Charge
+      PIERCING: Piercing
+      DENSITY: Density
+      BREACH: Breach
+      WIND_BURST: Wind Burst
+      MENDING: Mending
+      VANISHING_CURSE: Vanishing Curse
+      SOUL_SPEED: Soul Speed
+      SWIFT_SNEAK: Swift Sneak
+    unknown-enchantment: Unknown
+    level-format: '{roman}#ffffff ({level})'
+  history:
+    order-tab-title: ᴏʀᴅᴇʀ
+    deliver-tab-title: ᴅᴇʟɪᴠᴇʀ
+    unknown-time: Unknown
+    unknown-event: Event
+    unknown-details: No details
+    timestamp-pattern: yyyy-MM-dd HH:mm
+    timestamp-locale: en-US
+    timestamp-zone: system
+events:
+  history:
+    order-created:
+      action: Order Created
+      details: '{amount}x {item} at ${price} each (Subtotal ${subtotal}, Tax ${tax}, Total ${total})'
+    order-claimed-inventory:
+      action: Order Claimed
+      details: Claimed {amount}x {item} (Inventory)
+    order-claimed-drop:
+      action: Order Claimed
+      details: Claimed {amount}x {item} (Drop Page)
+    order-delivered:
+      action: Order Delivered
+      details: '{actor} delivered {amount}x {item}'
+    delivery-completed:
+      action: Delivery Completed
+      details: Delivered {amount}x {item} to {owner} and earned ${payout}
+    order-cancelled:
+      action: Order Cancelled
+      details: '{item} refunded ${refund}'
+    order-deleted-admin:
+      action: Order Deleted by Admin
+      details: '{actor} deleted {item} (Refund ${refund})'
+    order-cancelled-admin:
+      action: Order Cancelled by Admin
+      details: '{actor} cancelled {item} (Refund ${refund})'
+items:
+  manage-order:
+    claim:
+      max-stack-lines: 5
+      stack-line: '#a7b8b0- {amount}x {item}'
+      more-line: '#a7b8b0And {count} more'
+    admin-actions:
+      refund-line: '#ffffffRefund owner: {theme}${refund}'
+      no-refund-line: '#a7b8b0No refund remaining'
+  new-order:
+    enchants:
+      summary-line: '#a7b8b0- {enchant} {level}'

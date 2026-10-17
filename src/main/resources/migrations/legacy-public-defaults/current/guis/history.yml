@@ -1,0 +1,171 @@
+# Public order and delivery history menu.
+title: "&8ʜɪꜱᴛᴏʀʏ • {tab}"
+size: 54
+
+layout:
+  content-slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+
+labels:
+  order-tab-title: "ᴏʀᴅᴇʀ"
+  deliver-tab-title: "ᴅᴇʟɪᴠᴇʀ"
+  unknown-time: "Unknown"
+  unknown-event: "Event"
+  unknown-details: "No details"
+  timestamp-pattern: "yyyy-MM-dd HH:mm"
+  timestamp-locale: "en-US"
+  timestamp-zone: "system"
+
+# Future events store data, not rendered English. Existing history entries stay untouched.
+events:
+  order-created:
+    action: "Order Created"
+    details: "{amount}x {item} at ${price} each (Subtotal ${subtotal}, Tax ${tax}, Total ${total})"
+  order-claimed-inventory:
+    action: "Order Claimed"
+    details: "Claimed {amount}x {item} (Inventory)"
+  order-claimed-drop:
+    action: "Order Claimed"
+    details: "Claimed {amount}x {item} (Drop Page)"
+  order-delivered:
+    action: "Order Delivered"
+    details: "{actor} delivered {amount}x {item}"
+  delivery-completed:
+    action: "Delivery Completed"
+    details: "Delivered {amount}x {item} to {owner} and earned ${payout}"
+  order-cancelled:
+    action: "Order Cancelled"
+    details: "{item} refunded ${refund}"
+  order-deleted-admin:
+    action: "Order Deleted by Admin"
+    details: "{actor} deleted {item} (Refund ${refund})"
+  order-cancelled-admin:
+    action: "Order Cancelled by Admin"
+    details: "{actor} cancelled {item} (Refund ${refund})"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    custom-model-data: ''
+    name: ":iron_door: {theme}&lBACK"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+items:
+  info:
+    slot: 46
+    material: OAK_SIGN
+    name: "{theme}ᴠɪᴇᴡɪɴɢ"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "#ffffff{target}"
+      - "#a7b8b0Page {page}/{pages}"
+      - "#a7b8b0Entries: {entries}"
+  order-tab:
+    slot: 48
+    custom-model-data: ''
+    name: "{state_name}"
+    enabled: true
+    amount: 1
+    item-flags: all
+    selected-material: WRITABLE_BOOK
+    unselected-material: BOOK
+    selected-color: "#3ecf8e"
+    unselected-color: "{theme}"
+    selected-name: "{state_color}&lORDER HISTORY"
+    unselected-name: "{state_color}&lORDER HISTORY"
+    lore:
+      - "{state_lore}"
+    selected-lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent tab."
+      - " "
+      - "{good}→ Current Tab ←"
+    unselected-lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fView order history entries."
+      - " "
+      - "{good}→ Click to View Orders ←"
+  deliver-tab:
+    slot: 50
+    name: "{state_name}"
+    enabled: true
+    amount: 1
+    item-flags: all
+    selected-material: MINECART
+    unselected-material: CHEST_MINECART
+    selected-color: "#3ecf8e"
+    unselected-color: "{theme}"
+    selected-name: "{state_color}&lDELIVERY HISTORY"
+    unselected-name: "{state_color}&lDELIVERY HISTORY"
+    lore:
+      - "{state_lore}"
+    selected-lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent tab."
+      - " "
+      - "{good}→ Current Tab ←"
+    unselected-lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fView delivery history entries."
+      - " "
+      - "{good}→ Click to View Deliveries ←"
+  back-to-orders:
+    slot: 49
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  entry:
+    order-material: WRITABLE_BOOK
+    deliver-material: CHEST_MINECART
+    name: "{theme}{action}"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "#ffffff{details}"
+      - "#a7b8b0Player: {target}"
+      - "#a7b8b0Time: {time}"

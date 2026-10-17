@@ -12,6 +12,7 @@ import me.foesio.core.dialog.NativeDialogSupport;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.core.text.FoText;
 import me.foesio.foOrders.FoOrders;
+import me.foesio.foOrders.util.TextFormat;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantDialogService {
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
@@ -119,8 +121,15 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             "item", safe(request.itemName()),
             "selected", String.valueOf(request.selectedCount())
         );
-        actions.add(button(player, config.backButton(), placeholders, action(player, onAction, EnchantDialogAction.backToItems())));
-        actions.add(button(player, config.continueButton(), placeholders, action(player, onAction, EnchantDialogAction.continueOrder())));
+        for (String id : config.actionOrder()) {
+            actions.add(switch (id) {
+                case "back" -> button(player, config.backButton(), placeholders,
+                    action(player, onAction, EnchantDialogAction.backToItems()));
+                case "continue" -> button(player, config.continueButton(), placeholders,
+                    action(player, onAction, EnchantDialogAction.continueOrder()));
+                default -> throw new IllegalStateException("Invalid enchant dialog action: " + id);
+            });
+        }
         return actions;
     }
 
@@ -131,7 +140,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             : row.selectedLevel() > 0 ? button.selectedColor() : button.color();
         Map<String, String> placeholders = enchantPlaceholders(row, Math.max(1, row.selectedLevel()), color);
         return ActionButton.create(
-            component(player, replace(button.label(), placeholders)),
+            componentFinal(player, renderConfigured(button.label(), placeholders)),
             tooltip(player, button.tooltip(), placeholders),
             button.width(),
             action(player, onAction, EnchantDialogAction.setLevel(row.enchantmentKey(), row.selectedLevel() > 0 ? 0 : 1))
@@ -143,7 +152,7 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
         String color = row.selectedLevel() == level ? button.selectedColor() : button.color();
         Map<String, String> placeholders = enchantPlaceholders(row, level, color);
         return ActionButton.create(
-            component(player, replace(button.label(), placeholders)),
+            componentFinal(player, renderConfigured(button.label(), placeholders)),
             tooltip(player, button.tooltip(), placeholders),
             button.width(),
             action(player, onAction, EnchantDialogAction.setLevel(row.enchantmentKey(), level))
@@ -155,12 +164,12 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
     }
 
     private ActionButton button(Player player, EnchantDialogConfig.Button button, Map<String, String> placeholders, DialogAction action) {
-        String label = replace(button.label(), placeholders);
+        String label = renderConfigured(button.label(), placeholders);
         if (button.icon() != null && !button.icon().isBlank()) {
-            label = DialogIcons.withIcon(label, button.icon());
+            label = DialogIcons.withIcon(label, plugin.messages().resolveOwnerTokens(button.icon()));
         }
         return ActionButton.create(
-            component(player, label),
+            componentFinal(player, label),
             tooltip(player, button.tooltip(), placeholders),
             button.width(),
             action
@@ -187,22 +196,23 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
     }
 
     private Component title(Player player) {
-        String title = config.title();
+        String title = renderConfigured(config.title(), Map.of());
         if (config.titleIcon() != null && !config.titleIcon().isBlank()) {
-            title = DialogIcons.withIcon(title, config.titleIcon());
+            title = DialogIcons.withIcon(title, plugin.messages().resolveOwnerTokens(config.titleIcon()));
         }
-        return component(player, title);
+        return componentFinal(player, title);
     }
 
-    private Component component(Player player, String text) {
-        return DialogIcons.inlineTokens(player, LEGACY.deserialize(FoText.color(safe(text))));
+    private Component componentFinal(Player player, String text) {
+        return DialogIcons.inlineTokens(player, LEGACY.deserialize(
+            FoText.color(safe(text))));
     }
 
     private Component tooltip(Player player, String rawTooltip, Map<String, String> placeholders) {
         if (rawTooltip == null || rawTooltip.isBlank()) {
             return null;
         }
-        return component(player, replace(rawTooltip, placeholders));
+        return componentFinal(player, renderConfigured(rawTooltip, placeholders));
     }
 
     private Map<String, String> enchantPlaceholders(EnchantDialogRow row, int level, String color) {
@@ -211,19 +221,17 @@ public final class FoOrdersPaperEnchantDialogService implements FoOrdersEnchantD
             "enchantment", safe(row.name()),
             "level", String.valueOf(level),
             "roman", roman(level),
-            "color", safe(color)
+            "color", plugin.messages().resolveOwnerTokens(safe(color))
         );
     }
 
-    private String replace(String text, Map<String, String> placeholders) {
-        String formatted = safe(text);
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            String value = safe(entry.getValue());
-            formatted = formatted
-                .replace("{" + entry.getKey() + "}", value)
-                .replace("%" + entry.getKey() + "%", value);
-        }
-        return formatted;
+    private String renderConfigured(String template, Map<String, String> placeholders) {
+        return renderConfigured(template, placeholders, plugin.messages()::resolveOwnerTokens);
+    }
+
+    static String renderConfigured(String template, Map<String, String> placeholders,
+                                   Function<String, String> resolveOwnerTokens) {
+        return TextFormat.applyPlaceholders(resolveOwnerTokens.apply(template == null ? "" : template), placeholders);
     }
 
     private String roman(int value) {

@@ -1,0 +1,150 @@
+# Public item selection menu.
+title: "&8ꜱᴇʟᴇᴄᴛ ɪᴛᴇᴍ"
+size: 54
+
+layout:
+  content-slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+
+labels:
+  item-sort-options:
+    - "A-Z"
+    - "Z-A"
+  filter-options:
+    - "All"
+    - "Blocks"
+    - "Tools"
+    - "Food"
+    - "Combat"
+    - "Potions"
+    - "Books"
+    - "Ingredients"
+    - "Utilities"
+  # Optional per-material translations, keyed by Bukkit material name (e.g. DIAMOND_SWORD).
+  material-names: {}
+  enchant-enabled: "#3ecf8eEnabled"
+  enchant-disabled: "#ff5d73Disabled"
+  search-empty: "#a7b8b0None"
+  search-current: "{theme}{search}"
+  unknown-item: "Unknown Item"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: ":iron_door: {theme}&lBACK"
+    enabled: false
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: ":name_tag: {theme}&lSEARCH"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  back:
+    slot: 46
+  sort:
+    slot: 48
+    material: CAULDRON
+    name: "{theme}&lSORT"
+    enabled: true
+    amount: 1
+    item-flags: all
+    selected-option: "&7&l | &f{theme}» {option}"
+    other-option: "&7&l | &f#ffffff• {option}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{options}"
+      - " "
+      - "{good}→ Click to cycle ←"
+  filter:
+    slot: 49
+    material: HOPPER
+    name: "{theme}&lFILTER"
+    enabled: true
+    amount: 1
+    item-flags: all
+    selected-option: "&7&l | &f{theme}» {option}"
+    other-option: "&7&l | &f#ffffff• {option}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{options}"
+      - " "
+      - "{good}→ Click to cycle ←"
+  entry:
+    name: "{theme}&l{item}"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelect this item."
+      - " "
+      - "{good}→ Click to select item ←"
+  custom-entry:
+    # Optional: set material to override the custom template's preview icon.
+    # Optional: set custom-model-data to override/clear the template's model.
+    # Keep, move, or remove {template_lore} to control the template's own lore.
+    name: "{item}"
+    enabled: true
+    amount: 1
+    lore:
+      - "{template_lore}"
+      - " "
+      - "#a7b8b0Custom Item"
+      - "#a7b8b0ID: {custom_id}"
+      - "#ffffffOrder enchants: {enchant_state}"
+      - "#ffffffClick to Select"
+  search:
+    slot: 50
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53

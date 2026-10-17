@@ -1,48 +1,13 @@
-# Public claim-order menu.
 title: "&8ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
-
+rows: 6
+filler:
+  enabled: false
 buttons:
-  back:
-    material: IRON_DOOR
-    name: ":iron_door: {theme}&lBACK"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fReturn to the previous menu."
-      - " "
-      - "{good}→ Click to Go Back ←"
-  previous-page:
-    material: ARROW
-    name: "{theme}&lPREVIOUS PAGE"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fPage {page}/{max_page}."
-      - " "
-      - "{good}→ Click to Previous Page ←"
-  next-page:
-    material: ARROW
-    name: "{theme}&lNEXT PAGE"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fPage {page}/{max_page}."
-      - " "
-      - "{good}→ Click to Next Page ←"
-items:
-  back:
-    slot: 49
-  previous-page:
-    slot: 45
-  next-page:
-    slot: 53
   drop-page:
     slot: 52
-    material: DISPENSER
-    name: "#a7b8b0&lDROP PAGE"
+    enabled: true
+    material: "DISPENSER"
+    name: ":dispenser: #a7b8b0&lDROP PAGE"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -50,3 +15,133 @@ items:
       - "&7&l | &fDrop all items on this page."
       - " "
       - "{good}→ Click to Drop Items ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.claim-order.drop-page"
+entries:
+  previous-page:
+    slots:
+      - 45
+    enabled: true
+    item:
+      material: "ARROW"
+      name: ":arrow: {theme}&lPREVIOUS PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage {page}/{max_page}."
+        - " "
+        - "{good}→ Click to Previous Page ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.claim-order.previous-page"
+  next-page:
+    slots:
+      - 53
+    enabled: true
+    item:
+      material: "ARROW"
+      name: ":arrow: {theme}&lNEXT PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage {page}/{max_page}."
+        - " "
+        - "{good}→ Click to Next Page ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.claim-order.next-page"
+  entry:
+    slots:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 26
+      - 27
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+      - 35
+      - 36
+      - 37
+      - 38
+      - 39
+      - 40
+      - 41
+      - 42
+      - 43
+      - 44
+    enabled: true
+    source-item:
+      default-name: "{item}"
+      lore:
+        mode: "append"
+        lines:
+          - "&8ʙᴜᴛᴛᴏɴ"
+          - " "
+          - "&eⓘ Information ↓"
+          - "&7&l | &fClaimable stack: {amount}"
+          - " "
+          - "{good}→ Click to Claim ←"
+      enabled: true
+    actions:
+      left: "orders.claim-order.entry"
+      shift-left: "orders.claim-order.entry"

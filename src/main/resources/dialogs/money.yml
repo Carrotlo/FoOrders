@@ -3,9 +3,13 @@
 # Expected format: positive money amount. Compact suffixes from K through Td are accepted.
 # Invalid values keep current behavior and return to the order GUI.
 title: "#03fc88Number Input"
+title-icon: "gold_nugget"
+target-label: "Price"
 body: "#a7b8b0Type price per item."
-field-label: "#03fc88Price"
+field-label: "#03fc88{target}"
 initial-value: "{current}"
+# Paper's text input has no native placeholder control. Use {placeholder} in
+# body, field-label, or fallback.lines if you want to display this example.
 placeholder: "100"
 confirm-button:
   label: "#3ecf8eSave"
@@ -17,6 +21,15 @@ cancel-button:
   tooltip: "Keep current price"
   width: 100
   icon: "barrier"
+button-order: [cancel, confirm]
+columns: 2
+fallback:
+  cancel-keyword: "cancel"
+  lines:
+    - "{theme}{target}"
+    - "#a7b8b0Type price per item."
+    - "#ffffffCurrent: {theme}{current}"
+    - "#a7b8b0Type #ff5d73{cancel_keyword} #a7b8b0to cancel."
 body-width: 320
 input-width: 240
 max-length: 32

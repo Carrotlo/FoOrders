@@ -1,10 +1,15 @@
 # Native dialog shown for order and item search when Paper Dialog API is available.
 # Valid placeholders: {current}, {target}. Default {target} is "Search".
-# Empty input clears search. Chat fallback uses FoPluginCore prompt text.
+# Native empty input clears search; chat fallback uses clear-keyword.
 title: "#03fc88Search"
+title-icon: "spyglass"
+target-label: "Search"
+clear-keyword: "clear"
 body: "#a7b8b0Type search text. Leave empty to clear."
-field-label: "#03fc88Search"
+field-label: "#03fc88{target}"
 initial-value: "{current}"
+# Paper's text input has no native placeholder control. Use {placeholder} in
+# body, field-label, or fallback.lines if you want to display this example.
 placeholder: "diamond"
 confirm-button:
   label: "#3ecf8eApply"
@@ -16,6 +21,16 @@ cancel-button:
   tooltip: "Keep current search"
   width: 100
   icon: "barrier"
+button-order: [cancel, confirm]
+columns: 2
+fallback:
+  cancel-keyword: "cancel"
+  # A line containing {clear_keyword} is hidden if clear-keyword is empty.
+  lines:
+    - "{theme}{target}"
+    - "#a7b8b0Type search text. Type #ff5d73{clear_keyword} #a7b8b0to clear."
+    - "#ffffffCurrent: {theme}{current}"
+    - "#a7b8b0Type #ff5d73{cancel_keyword} #a7b8b0to cancel."
 body-width: 320
 input-width: 300
 max-length: 128

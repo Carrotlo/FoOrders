@@ -69,6 +69,14 @@ public final class HistoryDataStore {
         append(playerId, HistoryType.DELIVER, action, details);
     }
 
+    public void appendOrderEvent(UUID playerId, String eventKey, Map<String, String> values) {
+        appendEvent(playerId, HistoryType.ORDER, eventKey, values);
+    }
+
+    public void appendDeliverEvent(UUID playerId, String eventKey, Map<String, String> values) {
+        appendEvent(playerId, HistoryType.DELIVER, eventKey, values);
+    }
+
     public void saveAndUnload(UUID playerId) {
         writeBehind.snapshotAndWriteAsync(playerId, true);
     }
@@ -81,9 +89,26 @@ public final class HistoryDataStore {
         PlayerHistoryData snapshot;
         synchronized (playerLock(playerId)) {
             PlayerHistoryData data = getOrLoad(playerId);
-            String safeAction = sanitizeText(action, "Event");
-            String safeDetails = sanitizeText(details, "No details");
-            HistoryEntry entry = new HistoryEntry(System.currentTimeMillis(), safeAction, safeDetails);
+            String safeAction = rawText(action);
+            String safeDetails = rawText(details);
+            HistoryEntry entry = new HistoryEntry(System.currentTimeMillis(), safeAction, safeDetails, "", Map.of());
+            List<HistoryEntry> entries = historyType == HistoryType.ORDER ? data.orderHistory() : data.deliverHistory();
+            entries.add(0, entry);
+            trim(entries);
+            snapshot = data.copy();
+        }
+        writeBehind.writeAsync(playerId, snapshot);
+    }
+
+    private void appendEvent(UUID playerId, HistoryType historyType, String eventKey, Map<String, String> values) {
+        if (eventKey == null || eventKey.isBlank()) {
+            throw new IllegalArgumentException("History event key is required.");
+        }
+        Map<String, String> safeValues = values == null ? Map.of() : Map.copyOf(values);
+        PlayerHistoryData snapshot;
+        synchronized (playerLock(playerId)) {
+            PlayerHistoryData data = getOrLoad(playerId);
+            HistoryEntry entry = new HistoryEntry(System.currentTimeMillis(), "", "", eventKey, safeValues);
             List<HistoryEntry> entries = historyType == HistoryType.ORDER ? data.orderHistory() : data.deliverHistory();
             entries.add(0, entry);
             trim(entries);
@@ -145,16 +170,31 @@ public final class HistoryDataStore {
             if (rawMap == null) {
                 continue;
             }
-
-            long timestamp = parseTimestamp(rawMap.get("timestamp"));
-            String action = sanitizeText(rawMap.get("action"), "Event");
-            String details = sanitizeText(rawMap.get("details"), "No details");
-            entries.add(new HistoryEntry(timestamp, action, details));
+            entries.add(decodeEntry(rawMap));
         }
         return entries;
     }
 
-    private long parseTimestamp(Object rawTimestamp) {
+    static HistoryEntry decodeEntry(Map<?, ?> rawMap) {
+        long timestamp = parseTimestamp(rawMap.get("timestamp"));
+        String eventKey = rawMap.get("event-key") instanceof String value ? value : "";
+        if (!eventKey.isBlank()) {
+            Map<String, String> values = new LinkedHashMap<>();
+            if (rawMap.get("values") instanceof Map<?, ?> rawValues) {
+                for (Map.Entry<?, ?> value : rawValues.entrySet()) {
+                    if (value.getKey() instanceof String key && value.getValue() != null) {
+                        values.put(key, String.valueOf(value.getValue()));
+                    }
+                }
+            }
+            return new HistoryEntry(timestamp, "", "", eventKey, Map.copyOf(values));
+        }
+        String action = rawText(rawMap.get("action"));
+        String details = rawText(rawMap.get("details"));
+        return new HistoryEntry(timestamp, action, details, "", Map.of());
+    }
+
+    private static long parseTimestamp(Object rawTimestamp) {
         if (rawTimestamp instanceof Number number) {
             return Math.max(0L, number.longValue());
         }
@@ -168,9 +208,8 @@ public final class HistoryDataStore {
         return 0L;
     }
 
-    private String sanitizeText(Object rawValue, String fallback) {
-        String text = rawValue == null ? "" : String.valueOf(rawValue).trim();
-        return text.isEmpty() ? fallback : text;
+    private static String rawText(Object rawValue) {
+        return rawValue == null ? "" : String.valueOf(rawValue);
     }
 
     private PlayerHistoryData snapshotCachedPlayer(UUID playerId, boolean unload) {
@@ -208,13 +247,22 @@ public final class HistoryDataStore {
     private List<Map<String, Object>> serializeEntries(List<HistoryEntry> entries) {
         List<Map<String, Object>> serialized = new ArrayList<>(entries.size());
         for (HistoryEntry entry : entries) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("timestamp", Math.max(0L, entry.timestamp()));
-            row.put("action", sanitizeText(entry.action(), "Event"));
-            row.put("details", sanitizeText(entry.details(), "No details"));
-            serialized.add(row);
+            serialized.add(encodeEntry(entry));
         }
         return serialized;
+    }
+
+    static Map<String, Object> encodeEntry(HistoryEntry entry) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("timestamp", Math.max(0L, entry.timestamp()));
+        if (entry.eventKey().isBlank()) {
+            row.put("action", rawText(entry.action()));
+            row.put("details", rawText(entry.details()));
+        } else {
+            row.put("event-key", entry.eventKey());
+            row.put("values", entry.values());
+        }
+        return row;
     }
 
     private Path getFilePath(UUID playerId) {
@@ -230,9 +278,18 @@ public final class HistoryDataStore {
         DELIVER
     }
 
-    public record HistoryEntry(long timestamp, String action, String details) {
+    public record HistoryEntry(long timestamp, String action, String details, String eventKey, Map<String, String> values) {
+        public HistoryEntry(long timestamp, String action, String details) {
+            this(timestamp, action, details, "", Map.of());
+        }
+
+        public HistoryEntry {
+            values = values == null ? Map.of() : Map.copyOf(values);
+            eventKey = eventKey == null ? "" : eventKey;
+        }
+
         private HistoryEntry copy() {
-            return new HistoryEntry(timestamp, action, details);
+            return new HistoryEntry(timestamp, action, details, eventKey, values);
         }
     }
 

@@ -1,0 +1,81 @@
+# Public claim-order menu.
+title: "&8ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
+size: 54
+
+layout:
+  content-slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: ":iron_door: {theme}&lBACK"
+    enabled: false
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+items:
+  entry:
+    # Optional material, custom-model-data, and item-flags override only this GUI preview.
+    # The displayed stack amount is the actual claimable quantity, not a style setting.
+    name: "{item}"
+    enabled: true
+    lore:
+      - "{template_lore}"
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fClaimable stack: {amount}"
+      - " "
+      - "{good}→ Click to Claim ←"
+  back:
+    slot: 49
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  drop-page:
+    slot: 52
+    material: DISPENSER
+    name: "#a7b8b0&lDROP PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fDrop all items on this page."
+      - " "
+      - "{good}→ Click to Drop Items ←"

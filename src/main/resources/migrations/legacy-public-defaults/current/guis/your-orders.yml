@@ -1,0 +1,39 @@
+# Public /orders -> Your Orders menu.
+title: "&8ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
+size: 27
+
+layout:
+  order-slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+
+items:
+  order-entry:
+    # Optional: set material to override the ordered item's preview icon.
+    # Optional: set custom-model-data to override/clear the ordered item's model.
+    lore-layout:
+      - "{amount_line}"
+      - "{price_line}"
+      - " "
+      - "{delivered_line}"
+      - "{paid_line}"
+    name: "{theme}{owner}'s Order"
+    enabled: true
+    amount: 1
+    lore:
+      amount: "{theme}{amount} #ffffff{item}"
+      price: "{theme}${price} #ffffffeach"
+      delivered: "#a7b8b0{delivered}/#3ecf8e{amount} #a7b8b0Delivered"
+      paid: "#a7b8b0${paid}/#3ecf8e${total} #a7b8b0Paid"
+  new-order:
+    slot: 26
+    material: MAP
+    name: "{theme}&lNEW ORDER"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCreate a new item order."
+      - " "
+      - "{good}→ Click to Create Order ←"

@@ -9,6 +9,7 @@ pause: false
 
 max-level-columns: 5
 columns: 6
+action-order: [back, continue]
 
 item:
   width: 16

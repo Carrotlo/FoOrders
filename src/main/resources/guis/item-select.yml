@@ -1,28 +1,12 @@
-# Public item selection menu.
 title: "&8ꜱᴇʟᴇᴄᴛ ɪᴛᴇᴍ"
-
-labels:
-  item-sort-options:
-    - "A-Z"
-    - "Z-A"
-  filter-options:
-    - "All"
-    - "Blocks"
-    - "Tools"
-    - "Food"
-    - "Combat"
-    - "Potions"
-    - "Books"
-    - "Ingredients"
-    - "Utilities"
-  # Optional per-material translations, keyed by Bukkit material name (e.g. DIAMOND_SWORD).
-  material-names: {}
-  enchant-enabled: "#3ecf8eEnabled"
-  enchant-disabled: "#ff5d73Disabled"
-
+rows: 6
+filler:
+  enabled: false
 buttons:
   back:
-    material: IRON_DOOR
+    slot: 46
+    enabled: false
+    material: "IRON_DOOR"
     name: ":iron_door: {theme}&lBACK"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
@@ -31,28 +15,22 @@ buttons:
       - "&7&l | &fReturn to the previous menu."
       - " "
       - "{good}→ Click to Go Back ←"
-  previous-page:
-    material: ARROW
-    name: "{theme}&lPREVIOUS PAGE"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fPage {page}/{max_page}."
-      - " "
-      - "{good}→ Click to Previous Page ←"
-  next-page:
-    material: ARROW
-    name: "{theme}&lNEXT PAGE"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fPage {page}/{max_page}."
-      - " "
-      - "{good}→ Click to Next Page ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.item-select.back"
   search:
-    material: NAME_TAG
+    slot: 50
+    enabled: true
+    material: "NAME_TAG"
     name: ":name_tag: {theme}&lSEARCH"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
@@ -61,16 +39,23 @@ buttons:
       - "&7&l | &fCurrent: {current}"
       - " "
       - "{good}→ Click to Search ←"
-
-items:
-  back:
-    slot: 46
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.item-select.search"
   sort:
     slot: 48
-    material: CAULDRON
-    name: "{theme}&lSORT"
-    selected-option: "&7&l | &f{theme}» {option}"
-    other-option: "&7&l | &f#ffffff• {option}"
+    enabled: true
+    material: "CAULDRON"
+    name: ":cauldron: {theme}&lSORT"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -78,12 +63,26 @@ items:
       - "{options}"
       - " "
       - "{good}→ Click to cycle ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.item-select.sort"
+    cycle:
+      selected-format: "&7&l | &f{theme}» {option}"
+      unselected-format: "&7&l | &f#ffffff• {option}"
   filter:
     slot: 49
-    material: HOPPER
-    name: "{theme}&lFILTER"
-    selected-option: "&7&l | &f{theme}» {option}"
-    other-option: "&7&l | &f#ffffff• {option}"
+    enabled: true
+    material: "HOPPER"
+    name: ":hopper: {theme}&lFILTER"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -91,26 +90,159 @@ items:
       - "{options}"
       - " "
       - "{good}→ Click to cycle ←"
-  entry:
-    name: "{theme}&l{item}"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fSelect this item."
-      - " "
-      - "{good}→ Click to select item ←"
-  custom-entry:
-    name: "{item}"
-    lore:
-      - " "
-      - "#a7b8b0Custom Item"
-      - "#a7b8b0ID: {custom_id}"
-      - "#ffffffOrder enchants: {enchant_state}"
-      - "#ffffffClick to Select"
-  search:
-    slot: 50
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.item-select.filter"
+    cycle:
+      selected-format: "&7&l | &f{theme}» {option}"
+      unselected-format: "&7&l | &f#ffffff• {option}"
+entries:
   previous-page:
-    slot: 45
+    slots:
+      - 45
+    enabled: true
+    item:
+      material: "ARROW"
+      name: ":arrow: {theme}&lPREVIOUS PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage {page}/{max_page}."
+        - " "
+        - "{good}→ Click to Previous Page ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.item-select.previous-page"
   next-page:
-    slot: 53
+    slots:
+      - 53
+    enabled: true
+    item:
+      material: "ARROW"
+      name: ":arrow: {theme}&lNEXT PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage {page}/{max_page}."
+        - " "
+        - "{good}→ Click to Next Page ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.item-select.next-page"
+  entry:
+    slots:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 26
+      - 27
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+      - 35
+      - 36
+      - 37
+      - 38
+      - 39
+      - 40
+      - 41
+      - 42
+      - 43
+      - 44
+    enabled: true
+    source-item:
+      default-name: "{theme}&l{item}"
+      amount: 1
+      lore-states:
+        vanilla:
+          mode: "replace"
+          lines:
+            - "&8ʙᴜᴛᴛᴏɴ"
+            - " "
+            - "&eⓘ Information ↓"
+            - "&7&l | &fSelect this item."
+            - " "
+            - "{good}→ Click to select item ←"
+          enabled: true
+          item-flags:
+            - "HIDE_ENCHANTS"
+            - "HIDE_ATTRIBUTES"
+            - "HIDE_UNBREAKABLE"
+            - "HIDE_DESTROYS"
+            - "HIDE_PLACED_ON"
+            - "HIDE_ADDITIONAL_TOOLTIP"
+            - "HIDE_DYE"
+            - "HIDE_ARMOR_TRIM"
+            - "HIDE_STORED_ENCHANTS"
+        custom:
+          mode: "replace"
+          lines:
+            - "{source_lore}"
+            - " "
+            - "#a7b8b0Custom Item"
+            - "#a7b8b0ID: {custom_id}"
+            - "#ffffffOrder enchants: {enchant_state}"
+            - "#ffffffClick to Select"
+          enabled: true
+          amount: 1
+          default-name: "{item}"
+    actions:
+      left: "orders.item-select.entry"

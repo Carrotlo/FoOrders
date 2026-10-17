@@ -1,0 +1,116 @@
+# Public item selection menu.
+title: "&8ꜱᴇʟᴇᴄᴛ ɪᴛᴇᴍ"
+
+labels:
+  item-sort-options:
+    - "A-Z"
+    - "Z-A"
+  filter-options:
+    - "All"
+    - "Blocks"
+    - "Tools"
+    - "Food"
+    - "Combat"
+    - "Potions"
+    - "Books"
+    - "Ingredients"
+    - "Utilities"
+  # Optional per-material translations, keyed by Bukkit material name (e.g. DIAMOND_SWORD).
+  material-names: {}
+  enchant-enabled: "#3ecf8eEnabled"
+  enchant-disabled: "#ff5d73Disabled"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: ":iron_door: {theme}&lBACK"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: ":name_tag: {theme}&lSEARCH"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  back:
+    slot: 46
+  sort:
+    slot: 48
+    material: CAULDRON
+    name: "{theme}&lSORT"
+    selected-option: "&7&l | &f{theme}» {option}"
+    other-option: "&7&l | &f#ffffff• {option}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{options}"
+      - " "
+      - "{good}→ Click to cycle ←"
+  filter:
+    slot: 49
+    material: HOPPER
+    name: "{theme}&lFILTER"
+    selected-option: "&7&l | &f{theme}» {option}"
+    other-option: "&7&l | &f#ffffff• {option}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "{options}"
+      - " "
+      - "{good}→ Click to cycle ←"
+  entry:
+    name: "{theme}&l{item}"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelect this item."
+      - " "
+      - "{good}→ Click to select item ←"
+  custom-entry:
+    name: "{item}"
+    lore:
+      - " "
+      - "#a7b8b0Custom Item"
+      - "#a7b8b0ID: {custom_id}"
+      - "#ffffffOrder enchants: {enchant_state}"
+      - "#ffffffClick to Select"
+  search:
+    slot: 50
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53

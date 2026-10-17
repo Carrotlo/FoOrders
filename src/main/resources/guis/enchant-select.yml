@@ -1,14 +1,12 @@
-# Public enchantment selection menu.
 title: "&8ᴇɴᴄʜᴀɴᴛꜱ"
-
-labels:
-  none: "None"
-  # Optional translations keyed by enchantment name (e.g. SHARPNESS).
-  enchantment-names: {}
-
+rows: 6
+filler:
+  enabled: false
 buttons:
   back:
-    material: IRON_DOOR
+    slot: 46
+    enabled: false
+    material: "IRON_DOOR"
     name: ":iron_door: {theme}&lBACK"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
@@ -17,48 +15,23 @@ buttons:
       - "&7&l | &fReturn to the previous menu."
       - " "
       - "{good}→ Click to Go Back ←"
-  previous-page:
-    material: ARROW
-    name: "{theme}&lPREVIOUS PAGE"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fPage {page}/{max_page}."
-      - " "
-      - "{good}→ Click to Previous Page ←"
-  next-page:
-    material: ARROW
-    name: "{theme}&lNEXT PAGE"
-    lore:
-      - "&8ʙᴜᴛᴛᴏɴ"
-      - " "
-      - "&eⓘ Information ↓"
-      - "&7&l | &fPage {page}/{max_page}."
-      - " "
-      - "{good}→ Click to Next Page ←"
-items:
-  entry:
-    name: "{theme}{enchant}"
-    lore:
-      - "#a7b8b0Current: {theme}{current}"
-      - "#a7b8b0Max: {theme}{max}"
-      - "#a7b8b0For {item}"
-      - " "
-      - "#ffffffLeft click: +1 level"
-      - "#ffffffRight click: -1 level"
-      - "#ffffffShift + Left: +5 levels"
-      - "#ffffffShift + Right: -5 levels"
-  back:
-    slot: 46
-  previous-page:
-    slot: 45
-  next-page:
-    slot: 53
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.enchant-select.back"
   clear:
     slot: 48
-    material: RED_TERRACOTTA
-    name: "#ff5d73&lCLEAR"
+    enabled: true
+    material: "RED_TERRACOTTA"
+    name: ":red_terracotta: #ff5d73&lCLEAR"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -66,10 +39,23 @@ items:
       - "&7&l | &fRemove all selected enchantments."
       - " "
       - "{good}→ Click to Clear ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.enchant-select.clear"
   done:
     slot: 49
-    material: LIME_STAINED_GLASS_PANE
-    name: "#3ecf8e&lDONE"
+    enabled: true
+    material: "LIME_STAINED_GLASS_PANE"
+    name: ":lime_stained_glass_pane: #3ecf8e&lDONE"
     lore:
       - "&8ʙᴜᴛᴛᴏɴ"
       - " "
@@ -77,12 +63,184 @@ items:
       - "&7&l | &fSelected enchantments: {selected}"
       - " "
       - "{good}→ Click to Continue ←"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"
+    action: "orders.enchant-select.done"
+entries:
+  previous-page:
+    slots:
+      - 45
+    enabled: true
+    item:
+      material: "ARROW"
+      name: ":arrow: {theme}&lPREVIOUS PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage {page}/{max_page}."
+        - " "
+        - "{good}→ Click to Previous Page ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.enchant-select.previous-page"
+  next-page:
+    slots:
+      - 53
+    enabled: true
+    item:
+      material: "ARROW"
+      name: ":arrow: {theme}&lNEXT PAGE"
+      lore:
+        - "&8ʙᴜᴛᴛᴏɴ"
+        - " "
+        - "&eⓘ Information ↓"
+        - "&7&l | &fPage {page}/{max_page}."
+        - " "
+        - "{good}→ Click to Next Page ←"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+    actions:
+      left: "orders.enchant-select.next-page"
+  entry:
+    slots:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 26
+      - 27
+      - 28
+      - 29
+      - 30
+      - 31
+      - 32
+      - 33
+      - 34
+      - 35
+      - 36
+      - 37
+      - 38
+      - 39
+      - 40
+      - 41
+      - 42
+      - 43
+      - 44
+    enabled: true
+    source-item:
+      default-name: "{theme}{enchant}"
+      amount: 1
+      item-flags:
+        - "HIDE_ENCHANTS"
+        - "HIDE_ATTRIBUTES"
+        - "HIDE_UNBREAKABLE"
+        - "HIDE_DESTROYS"
+        - "HIDE_PLACED_ON"
+        - "HIDE_ADDITIONAL_TOOLTIP"
+        - "HIDE_DYE"
+        - "HIDE_ARMOR_TRIM"
+        - "HIDE_STORED_ENCHANTS"
+      lore-states:
+        selected:
+          mode: "replace"
+          lines:
+            - "#a7b8b0Current: {theme}{current}"
+            - "#a7b8b0Max: {theme}{max}"
+            - "#a7b8b0For {item}"
+            - " "
+            - "#ffffffLeft click: +1 level"
+            - "#ffffffRight click: -1 level"
+            - "#ffffffShift + Left: +5 levels"
+            - "#ffffffShift + Right: -5 levels"
+          material: "ENCHANTED_BOOK"
+        unselected:
+          mode: "replace"
+          lines:
+            - "#a7b8b0Current: {theme}{current}"
+            - "#a7b8b0Max: {theme}{max}"
+            - "#a7b8b0For {item}"
+            - " "
+            - "#ffffffLeft click: +1 level"
+            - "#ffffffRight click: -1 level"
+            - "#ffffffShift + Left: +5 levels"
+            - "#ffffffShift + Right: -5 levels"
+          material: "BOOK"
+      enabled: true
+    actions:
+      left: "orders.enchant-select.entry"
+      right: "orders.enchant-select.entry"
+      shift-left: "orders.enchant-select.entry"
+      shift-right: "orders.enchant-select.entry"
+decorations:
   controls:
-    slot: 50
-    material: OAK_SIGN
-    name: "{theme}ᴄᴏɴᴛʀᴏʟꜱ"
+    slots:
+      - 50
+    material: "OAK_SIGN"
+    name: ":oak_sign: {theme}ᴄᴏɴᴛʀᴏʟꜱ"
     lore:
       - "#ffffffLeft click: +1 level"
       - "#ffffffRight click: -1 level"
       - "#ffffffShift + Left: +5 levels"
       - "#ffffffShift + Right: -5 levels"
+    amount: 1
+    item-flags:
+      - "HIDE_ENCHANTS"
+      - "HIDE_ATTRIBUTES"
+      - "HIDE_UNBREAKABLE"
+      - "HIDE_DESTROYS"
+      - "HIDE_PLACED_ON"
+      - "HIDE_ADDITIONAL_TOOLTIP"
+      - "HIDE_DYE"
+      - "HIDE_ARMOR_TRIM"
+      - "HIDE_STORED_ENCHANTS"

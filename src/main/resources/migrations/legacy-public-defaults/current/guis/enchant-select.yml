@@ -1,0 +1,159 @@
+# Public enchantment selection menu.
+title: "&8ᴇɴᴄʜᴀɴᴛꜱ"
+size: 54
+
+layout:
+  content-slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+
+labels:
+  none: "None"
+  # Translate any name by editing its key. Missing keys stay absent.
+  enchantment-names:
+    PROTECTION: "Protection"
+    FIRE_PROTECTION: "Fire Protection"
+    FEATHER_FALLING: "Feather Falling"
+    BLAST_PROTECTION: "Blast Protection"
+    PROJECTILE_PROTECTION: "Projectile Protection"
+    RESPIRATION: "Respiration"
+    AQUA_AFFINITY: "Aqua Affinity"
+    THORNS: "Thorns"
+    DEPTH_STRIDER: "Depth Strider"
+    FROST_WALKER: "Frost Walker"
+    BINDING_CURSE: "Binding Curse"
+    SHARPNESS: "Sharpness"
+    SMITE: "Smite"
+    BANE_OF_ARTHROPODS: "Bane Of Arthropods"
+    KNOCKBACK: "Knockback"
+    FIRE_ASPECT: "Fire Aspect"
+    LOOTING: "Looting"
+    SWEEPING_EDGE: "Sweeping Edge"
+    EFFICIENCY: "Efficiency"
+    SILK_TOUCH: "Silk Touch"
+    UNBREAKING: "Unbreaking"
+    FORTUNE: "Fortune"
+    POWER: "Power"
+    PUNCH: "Punch"
+    FLAME: "Flame"
+    INFINITY: "Infinity"
+    LUCK_OF_THE_SEA: "Luck Of The Sea"
+    LURE: "Lure"
+    LOYALTY: "Loyalty"
+    IMPALING: "Impaling"
+    RIPTIDE: "Riptide"
+    CHANNELING: "Channeling"
+    MULTISHOT: "Multishot"
+    QUICK_CHARGE: "Quick Charge"
+    PIERCING: "Piercing"
+    DENSITY: "Density"
+    BREACH: "Breach"
+    WIND_BURST: "Wind Burst"
+    MENDING: "Mending"
+    VANISHING_CURSE: "Vanishing Curse"
+    SOUL_SPEED: "Soul Speed"
+    SWIFT_SNEAK: "Swift Sneak"
+  unknown-enchantment: "Unknown"
+  level-format: "{roman}#ffffff ({level})"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: ":iron_door: {theme}&lBACK"
+    enabled: false
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+items:
+  entry:
+    name: "{theme}{enchant}"
+    enabled: true
+    amount: 1
+    item-flags: all
+    selected-material: ENCHANTED_BOOK
+    unselected-material: BOOK
+    lore:
+      - "#a7b8b0Current: {theme}{current}"
+      - "#a7b8b0Max: {theme}{max}"
+      - "#a7b8b0For {item}"
+      - " "
+      - "#ffffffLeft click: +1 level"
+      - "#ffffffRight click: -1 level"
+      - "#ffffffShift + Left: +5 levels"
+      - "#ffffffShift + Right: -5 levels"
+  back:
+    slot: 46
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  clear:
+    slot: 48
+    material: RED_TERRACOTTA
+    name: "#ff5d73&lCLEAR"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fRemove all selected enchantments."
+      - " "
+      - "{good}→ Click to Clear ←"
+  done:
+    slot: 49
+    material: LIME_STAINED_GLASS_PANE
+    name: "#3ecf8e&lDONE"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelected enchantments: {selected}"
+      - " "
+      - "{good}→ Click to Continue ←"
+  controls:
+    slot: 50
+    material: OAK_SIGN
+    name: "{theme}ᴄᴏɴᴛʀᴏʟꜱ"
+    enabled: true
+    amount: 1
+    item-flags: all
+    lore:
+      - "#ffffffLeft click: +1 level"
+      - "#ffffffRight click: -1 level"
+      - "#ffffffShift + Left: +5 levels"
+      - "#ffffffShift + Right: -5 levels"

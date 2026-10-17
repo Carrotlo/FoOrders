@@ -24,9 +24,15 @@ public final class OrderCommand implements CommandExecutor, TabCompleter {
             ordersMenuManager.messages().send(sender, "general.only-players");
             return true;
         }
+        if (!player.hasPermission("foorders.use")) {
+            ordersMenuManager.messages().send(player, "general.no-permission");
+            return true;
+        }
 
         String search = args.length == 0 ? "" : String.join(" ", args);
-        ordersMenuManager.openOrdersMenuFromCommand(player, search);
+        if (!ordersMenuManager.openOrdersMenuFromCommand(player, search)) {
+            ordersMenuManager.notifyRefreshCooldown(player);
+        }
         return true;
     }
 

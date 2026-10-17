@@ -82,6 +82,26 @@ final class ItemSelectState {
     int sortIndex = 0;
     int filterIndex = 0;
     String search = "";
+
+    void clearUnavailableControls(boolean sortAvailable, boolean filterAvailable,
+                                  boolean searchAvailable) {
+        boolean changed = false;
+        if (!sortAvailable && sortIndex != 0) {
+            sortIndex = 0;
+            changed = true;
+        }
+        if (!filterAvailable && filterIndex != 0) {
+            filterIndex = 0;
+            changed = true;
+        }
+        if (!searchAvailable && (search == null || !search.isEmpty())) {
+            search = "";
+            changed = true;
+        }
+        if (changed) {
+            page = 1;
+        }
+    }
 }
 
 record ItemSelectCacheKey(int contentRevision, int sortIndex, int filterIndex, String search) {
@@ -107,10 +127,6 @@ record OrderableItemOption(
 
     String choiceKey() {
         return isCustom() ? customChoiceKey(customItemId) : materialChoiceKey(material);
-    }
-
-    String choiceLabel() {
-        return isCustom() ? displayName + " (" + customItemId + ")" : displayName;
     }
 
     static String materialChoiceKey(Material material) {

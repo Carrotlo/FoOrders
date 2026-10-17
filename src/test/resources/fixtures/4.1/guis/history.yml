@@ -1,0 +1,88 @@
+# Public order and delivery history menu.
+title: "&8ʜɪꜱᴛᴏʀʏ • {tab}"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    custom-model-data: ''
+    name: "{theme}&lBACK"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: "{theme}&lSEARCH"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  info:
+    slot: 46
+    material: OAK_SIGN
+    name: "{theme}ᴠɪᴇᴡɪɴɢ"
+    lore:
+      - "#ffffff{target}"
+      - "#a7b8b0Page {page}/{pages}"
+      - "#a7b8b0Entries: {entries}"
+  order-tab:
+    slot: 48
+    custom-model-data: ''
+    name: "{theme}&lORDER HISTORY"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fView order history entries."
+      - " "
+      - "{good}→ Click to View Orders ←"
+  deliver-tab:
+    slot: 50
+    name: "{theme}&lDELIVERY HISTORY"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fView delivery history entries."
+      - " "
+      - "{good}→ Click to View Deliveries ←"
+  back-to-orders:
+    slot: 49
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  entry:
+    name: "{theme}{action}"
+    lore:
+      - "#ffffff{details}"
+      - "#a7b8b0Player: {target}"
+      - "#a7b8b0Time: {time}"

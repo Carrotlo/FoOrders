@@ -1,0 +1,71 @@
+# Public new-order menu.
+title: "&8ɴᴇᴡ ᴏʀᴅᴇʀ"
+
+items:
+  cancel:
+    slot: 10
+    material: RED_STAINED_GLASS_PANE
+    name: "#ff5d73&lCANCEL"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fDiscard this order draft."
+      - " "
+      - "{good}→ Click to Cancel ←"
+  item:
+    slot: 12
+    name: "{theme}&lITEM"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelected: {item}"
+      - " "
+      - "{good}→ Click to Choose Item ←"
+  amount:
+    slot: 13
+    material: CHEST
+    name: "{theme}&lAMOUNT"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent amount: {amount}"
+      - " "
+      - "{good}→ Click to Set Amount ←"
+  price:
+    slot: 14
+    material: EMERALD
+    name: "{theme}&lPRICE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPrice per item: ${price}"
+      - " "
+      - "{good}→ Click to Set Price ←"
+  enchants:
+    slot: 15
+    material: ENCHANTED_BOOK
+    name: "{theme}&lENCHANTS"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fConfigure item enchantments."
+      - " "
+      - "{good}→ Click to Edit Enchants ←"
+  confirm:
+    slot: 16
+    material: LIME_STAINED_GLASS_PANE
+    name: "#3ecf8e&lCONFIRM"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSubtotal: {theme}${subtotal}"
+      - "&7&l | &fTax ({tax_percent}%): {theme}${tax}"
+      - "&7&l | &fTotal: #3ecf8e${total}"
+      - " "
+      - "{good}→ Click to Confirm Order ←"

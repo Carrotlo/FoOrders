@@ -1,0 +1,15 @@
+# Public /orders -> Your Orders menu.
+title: "&8ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ"
+
+items:
+  new-order:
+    slot: 26
+    material: MAP
+    name: "{theme}&lNEW ORDER"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCreate a new item order."
+      - " "
+      - "{good}→ Click to Create Order ←"

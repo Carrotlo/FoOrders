@@ -4,8 +4,12 @@ import me.foesio.core.text.FoText;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class TextFormat {
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^{}]+)}|%([^%]+)%");
+
     private TextFormat() {
     }
 
@@ -14,14 +18,16 @@ public final class TextFormat {
     }
 
     public static String applyPlaceholders(String message, Map<String, String> placeholders) {
-        String formatted = message == null ? "" : message;
-        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
-            String value = entry.getValue() == null ? "" : entry.getValue();
-            formatted = formatted
-                .replace("{" + entry.getKey() + "}", value)
-                .replace("%" + entry.getKey() + "%", value);
+        Matcher matcher = PLACEHOLDER.matcher(message == null ? "" : message);
+        StringBuilder formatted = new StringBuilder();
+        while (matcher.find()) {
+            String key = matcher.group(1) == null ? matcher.group(2) : matcher.group(1);
+            String value = placeholders != null && placeholders.containsKey(key)
+                ? placeholders.get(key) : matcher.group();
+            matcher.appendReplacement(formatted, Matcher.quoteReplacement(value == null ? "" : value));
         }
-        return formatted;
+        matcher.appendTail(formatted);
+        return formatted.toString();
     }
 
     public static Map<String, String> placeholders(Object... values) {

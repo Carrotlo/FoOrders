@@ -1,0 +1,61 @@
+# Public claim-order menu.
+title: "&8ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: "{theme}&lBACK"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: "{theme}&lSEARCH"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  drop-page:
+    slot: 52
+    material: DISPENSER
+    name: "#a7b8b0&lDROP PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fDrop all items on this page."
+      - " "
+      - "{good}→ Click to Drop Items ←"

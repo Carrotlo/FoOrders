@@ -3,6 +3,8 @@ package me.foesio.foOrders;
 import me.foesio.core.dialog.DialogService;
 import me.foesio.core.economy.VaultEconomyBridge;
 import me.foesio.core.gui.EntryBrowserHolder;
+import me.foesio.core.gui.publicgui.PublicGuiClick;
+import me.foesio.core.gui.publicgui.PublicGuiInventoryHolder;
 import me.foesio.core.inventory.InventoryCloseSuppressor;
 import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.gui.GuiButtonConfig;
@@ -36,8 +38,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.lang.reflect.Constructor;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -80,14 +80,6 @@ public final class OrdersMenuManager implements Listener {
     static final String TITLE_ADMIN_EDITOR_EDIT = "ᴇᴅɪᴛ ɪᴛᴇᴍ";
     static final String TITLE_HISTORY_PREFIX = "ʜɪꜱᴛᴏʀʏ";
 
-    static final List<Integer> MAIN_ORDER_SLOTS = List.of(
-        10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34
-    );
-    static final int MAIN_ORDERS_CAPACITY = MAIN_ORDER_SLOTS.size();
-    static final int CLAIM_PAGE_CAPACITY = 45;
-    static final int HISTORY_PAGE_CAPACITY = 45;
     static final int MIN_PLAYER_ORDERS = 1;
     static final int MAX_PLAYER_ORDERS_CAP = 26;
     static final long DEFAULT_ORDER_MENU_REFRESH_COOLDOWN_MILLIS = 50L;
@@ -119,8 +111,6 @@ public final class OrdersMenuManager implements Listener {
     static final String ORDER_CLAIMED_DROP_SOUND = "orders.claimed-drop";
     static final double MIN_ORDER_TAX_PERCENTAGE = 0D;
     static final double MAX_ORDER_TAX_PERCENTAGE = 100D;
-    static final int ITEM_SELECT_PAGE_SIZE = 45;
-    static final int ENCHANT_SELECT_PAGE_SIZE = 45;
 
     static final int SORT_SLOT = 47;
     static final int FILTER_SLOT = 48;
@@ -233,9 +223,9 @@ public final class OrdersMenuManager implements Listener {
     final BedrockPlayerDetector bedrockPlayerDetector;
     OrdersMenuViewSupport viewSupport;
     OrdersMenuInteractionSupport interactionSupport;
+    private OrdersPublicGuis publicGuis;
     volatile FoOrdersDialogInputService dialogInputService;
     volatile FoOrdersItemSelectionDialogService itemSelectionDialogService;
-    final DateTimeFormatter historyTimestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
     final Map<UUID, MenuViewState> menuStates = new ConcurrentHashMap<>();
     final Map<UUID, Long> orderMenuRefreshNanos = new ConcurrentHashMap<>();
     final Map<UUID, Integer> pendingMainMenuRefreshIds = new ConcurrentHashMap<>();
@@ -344,6 +334,115 @@ public final class OrdersMenuManager implements Listener {
         return guiConfigManager;
     }
 
+    void setPublicGuis(OrdersPublicGuis publicGuis) {
+        this.publicGuis = Objects.requireNonNull(publicGuis, "publicGuis");
+    }
+
+    OrdersPublicGuis publicGuis() {
+        if (publicGuis == null) {
+            throw new IllegalStateException("FoOrders public GUIs are not loaded");
+        }
+        return publicGuis;
+    }
+
+    boolean publicGuiAvailable(String key) {
+        return publicGuis != null && publicGuis.available(key);
+    }
+
+    void handlePublicGuiClick(PublicGuiClick click) {
+        Player player = click.player();
+        String menu = click.menuId().substring("orders.".length());
+        String action = click.actionId().substring(("orders." + menu + ".").length());
+        if (!matchesDisplayedEntry(click, menu, action)) {
+            return;
+        }
+        int slot = action.equals("entry") || action.equals("order-entry")
+            ? click.rawSlot() : guiConfigManager.activeControlSlot(menu + "." + action);
+        org.bukkit.event.inventory.ClickType kind = switch (click.clickKind()) {
+            case LEFT -> org.bukkit.event.inventory.ClickType.LEFT;
+            case RIGHT -> org.bukkit.event.inventory.ClickType.RIGHT;
+            case SHIFT_LEFT -> org.bukkit.event.inventory.ClickType.SHIFT_LEFT;
+            case SHIFT_RIGHT -> org.bukkit.event.inventory.ClickType.SHIFT_RIGHT;
+            case DROP -> org.bukkit.event.inventory.ClickType.DROP;
+            case CONTROL_DROP -> org.bukkit.event.inventory.ClickType.CONTROL_DROP;
+            case MIDDLE -> org.bukkit.event.inventory.ClickType.MIDDLE;
+            case NUMBER_KEY -> org.bukkit.event.inventory.ClickType.NUMBER_KEY;
+            case SWAP_OFFHAND -> org.bukkit.event.inventory.ClickType.SWAP_OFFHAND;
+        };
+        switch (menu) {
+            case "main" -> interactionSupport.actionSupport.handleMainClick(player, slot, kind);
+            case "your-orders" -> interactionSupport.actionSupport.handleYourOrdersClick(player, slot);
+            case "new-order" -> interactionSupport.actionSupport.handleNewOrderClick(player, slot);
+            case "item-select" -> interactionSupport.actionSupport.handleItemSelectClick(player, slot);
+            case "enchant-select" -> interactionSupport.actionSupport.handleEnchantSelectClick(player, slot, kind);
+            case "manage-order" -> interactionSupport.actionSupport.handleManageOrderClick(player, slot);
+            case "claim-order" -> interactionSupport.deliverySupport.handleClaimOrderClick(player, slot,
+                player.getOpenInventory().getTopInventory().getItem(click.rawSlot()));
+            case "delivery-confirm" -> interactionSupport.deliverySupport.handleDeliveryConfirmClick(player, slot);
+            case "history" -> interactionSupport.actionSupport.handleHistoryClick(player, slot);
+            default -> throw new IllegalArgumentException("No public click route for " + menu);
+        }
+    }
+
+    private boolean matchesDisplayedEntry(PublicGuiClick click, String menu, String action) {
+        if (click.entryId() == null || !Set.of("order-entry", "entry", "cancel", "admin-actions").contains(
+            click.entryRegion())) {
+            return true;
+        }
+        Player player = click.player();
+        MenuViewState state = menuStates.get(player.getUniqueId());
+        if (state == null) return false;
+        if (menu.equals("main") && action.equals("order-entry")) {
+            List<Integer> slots = guiConfigManager.contentSlots("main", "order-slots");
+            int offset = slots.indexOf(click.rawSlot());
+            List<MainOrderView> visible = state.visibleMainOrders;
+            int index = (state.page - 1) * slots.size() + offset;
+            if (offset < 0 || visible == null || index < 0 || index >= visible.size()) return false;
+            MainOrderView selected = visible.get(index);
+            return click.entryId().equals(selected.ownerId() + ":" + selected.order().getOrderId());
+        }
+        if (menu.equals("your-orders") && action.equals("order-entry")) {
+            List<Integer> slots = guiConfigManager.contentSlots("your-orders", "order-slots");
+            int index = slots.indexOf(click.rawSlot());
+            List<PlayerDataStore.OrderEntry> orders = playerDataStore.getOrCreate(player.getUniqueId()).getOrders();
+            return index >= 0 && index < orders.size()
+                && click.entryId().equals(orders.get(index).getOrderId());
+        }
+        if (menu.equals("item-select") && action.equals("entry")) {
+            ItemSelectState select = state.getOrCreateItemSelectState();
+            List<Integer> slots = guiConfigManager.contentSlots("item-select", "content-slots");
+            int offset = slots.indexOf(click.rawSlot());
+            List<OrderableItemOption> options = itemSupport.getCachedFilteredSortedItems(select);
+            int index = (select.page - 1) * slots.size() + offset;
+            return offset >= 0 && index < options.size()
+                && click.entryId().equals(options.get(index).choiceKey());
+        }
+        if (menu.equals("enchant-select") && action.equals("entry")) {
+            List<Integer> slots = guiConfigManager.contentSlots("enchant-select", "content-slots");
+            int offset = slots.indexOf(click.rawSlot());
+            Material material = itemSupport.resolveDraftMaterial(state.getOrCreateDraft());
+            List<Enchantment> enchantments = itemSupport.getVisibleInventoryEnchantments(material);
+            int index = (state.enchantPage - 1) * slots.size() + offset;
+            return offset >= 0 && index < enchantments.size()
+                && click.entryId().equals(enchantments.get(index).getKey().toString());
+        }
+        if (menu.equals("claim-order") && action.equals("entry")) {
+            List<Integer> slots = guiConfigManager.contentSlots("claim-order", "content-slots");
+            int offset = slots.indexOf(click.rawSlot());
+            PlayerDataStore.OrderEntry order = interactionSupport.getSelectedOrder(
+                playerDataStore.getOrCreate(player.getUniqueId()), state);
+            int index = (state.claimPage - 1) * slots.size() + offset;
+            return offset >= 0 && order != null
+                && click.entryId().equals(order.getOrderId() + ":" + index);
+        }
+        if (menu.equals("manage-order") && (action.equals("cancel") || action.equals("admin-actions"))) {
+            PlayerDataStore.OrderEntry order = interactionSupport.getSelectedOrder(
+                playerDataStore.getOrCreate(player.getUniqueId()), state);
+            return order != null && click.entryId().equals(order.getOrderId());
+        }
+        return true;
+    }
+
     GuiButtonConfig guiButtons() {
         return guiConfigManager.buttons();
     }
@@ -362,6 +461,13 @@ public final class OrdersMenuManager implements Listener {
         FoOrdersItemSelectionDialogService currentService = itemSelectionDialogService;
         if (currentService != null) {
             currentService.clearCache();
+        }
+    }
+
+    void reloadItemSelectionDialogConfig() {
+        FoOrdersItemSelectionDialogService currentService = itemSelectionDialogService;
+        if (currentService != null) {
+            currentService.reloadConfig();
         }
     }
 
@@ -384,8 +490,12 @@ public final class OrdersMenuManager implements Listener {
         sounds.play(player, path);
     }
 
-    void playSoundWithPitchVariation(Player player, String path, float maxVariation) {
-        sounds.playWithPitchVariation(player, path, maxVariation);
+    void playSoundWithPitchVariation(Player player, String path) {
+        double variation = sounds.configuration().getDouble(path + ".pitch-variation", 0D);
+        if (!Double.isFinite(variation) || variation < 0D) {
+            variation = 0D;
+        }
+        sounds.playWithPitchVariation(player, path, (float) Math.min(variation, 2D));
     }
 
     public void setEconomy(VaultEconomyBridge economy) {
@@ -446,6 +556,10 @@ public final class OrdersMenuManager implements Listener {
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
+        if (publicGuis != null && event.getView().getTopInventory().getHolder() instanceof OrdersMenuHolder holder
+            && holder.getMenuType() == MenuType.DELIVER) {
+            return;
+        }
         interactionSupport.onInventoryClose(event);
     }
 
@@ -477,6 +591,10 @@ public final class OrdersMenuManager implements Listener {
             return false;
         }
         if (inventory.getHolder() instanceof OrdersMenuHolder) {
+            return true;
+        }
+        if (inventory.getHolder() instanceof PublicGuiInventoryHolder holder
+            && holder.frame().definition().menuId().startsWith("orders.")) {
             return true;
         }
         return inventory.getHolder() instanceof EntryBrowserHolder holder
@@ -564,6 +682,12 @@ public final class OrdersMenuManager implements Listener {
 
         orderMenuRefreshNanos.put(playerId, now);
         return true;
+    }
+
+    public void notifyRefreshCooldown(Player player) {
+        if (player != null) {
+            interactionSupport.sendErrorActionbar(player, messages.get("actionbar.refresh-cooldown"));
+        }
     }
 
     private void reloadOrderBlacklistsFromConfig() {

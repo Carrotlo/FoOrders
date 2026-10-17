@@ -1,0 +1,50 @@
+# Native dialog shown for choosing enchantments when Paper Dialog API is available.
+# The selected item icon is filled automatically from the item being ordered.
+# Valid placeholders: {item}, {selected}, {enchant}, {level}, {roman}
+enabled: true
+title: "Choose Enchantments"
+title-icon: "experience_bottle"
+can-close-with-escape: true
+pause: false
+
+max-level-columns: 5
+columns: 6
+
+item:
+  width: 16
+  height: 16
+  show-decorations: true
+  show-tooltip: true
+
+enchant-button:
+  label: "{color}{enchant}"
+  tooltip: "Click to toggle {enchant}"
+  width: 144
+  color: "#a7b8b0"
+  selected-color: "#a7b8b0"
+  curse-color: "#ff5d73"
+
+level-button:
+  label: "{color}{roman}"
+  tooltip: "Set {enchant} to {roman}"
+  width: 36
+  color: "#a7b8b0"
+  selected-color: "#03fc88"
+
+back-button:
+  label: "#a7b8b0Back to Items"
+  tooltip: "Choose another item"
+  width: 180
+  icon: "arrow"
+
+continue-button:
+  label: "#3ecf8eConfirm"
+  tooltip: "Confirm enchantments"
+  width: 180
+  icon: "emerald"
+
+spacer-button:
+  label: " "
+  tooltip: ""
+  width: 1
+  icon: ""

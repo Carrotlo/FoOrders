@@ -6,6 +6,11 @@ import me.foesio.core.gui.EntryBrowserMenus;
 import me.foesio.core.gui.EntryBrowserRequest;
 import me.foesio.core.gui.FoButtonStyle;
 import me.foesio.core.editor.EditorItemFactory;
+import me.foesio.core.gui.publicgui.PublicGuiRenderInput;
+import me.foesio.core.gui.publicgui.PublicGuiFrame;
+import me.foesio.core.gui.publicgui.PublicGuiInventoryHolder;
+import me.foesio.core.gui.publicgui.PublicGuiRenderer;
+import me.foesio.core.gui.publicgui.PublicGuiText;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.dialog.EnchantDialogAction;
 import me.foesio.foOrders.dialog.EnchantDialogRequest;
@@ -24,6 +29,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,15 +40,18 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
 
 import static me.foesio.foOrders.OrdersMenuManager.*;
 
 final class OrdersMenuViewSupport {
     private static final long NATIVE_DIALOG_CLOSE_SUPPRESSION_TICKS = 5L;
+    private static final Set<String> HISTORY_EVENT_KEYS = Set.of(
+        "order-created", "order-claimed-inventory", "order-claimed-drop", "order-delivered",
+        "delivery-completed", "order-cancelled", "order-deleted-admin", "order-cancelled-admin");
 
     private final OrdersMenuManager manager;
     private final FoScheduler scheduler;
-    private final DateTimeFormatter historyTimestampFormatter;
     private final Map<UUID, MenuViewState> menuStates;
     private final Map<UUID, PendingDeliveryState> pendingDeliveries;
     private final Set<UUID> waitingDeliveryPlayers;
@@ -57,7 +66,6 @@ final class OrdersMenuViewSupport {
     OrdersMenuViewSupport(OrdersMenuManager manager) {
         this.manager = manager;
         this.scheduler = manager.scheduler;
-        this.historyTimestampFormatter = manager.historyTimestampFormatter;
         this.menuStates = manager.menuStates;
         this.pendingDeliveries = manager.pendingDeliveries;
         this.waitingDeliveryPlayers = manager.waitingDeliveryPlayers;
@@ -130,6 +138,13 @@ final class OrdersMenuViewSupport {
         return manager.itemSupport.createMenu(menuType, size, title);
     }
 
+    /** A disabled control must not clear another control moved into its old slot. */
+    private void putItemIfPresent(Inventory menu, int slot, ItemStack item) {
+        if (item != null) {
+            menu.setItem(slot, item);
+        }
+    }
+
     private void openMenu(Player player, Inventory menu) {
         openMenu(player, menu, null);
     }
@@ -148,6 +163,56 @@ final class OrdersMenuViewSupport {
         manager.itemSupport.openMenu(player, menu);
     }
 
+    private Map<String, String> publicValues(Map<String, String> values) {
+        Map<String, String> merged = new HashMap<>(manager.messages().ownerTokens());
+        merged.putAll(values);
+        return merged;
+    }
+
+    private boolean publicGuiReady(Player player, String key) {
+        if (manager.publicGuiAvailable(key)) return true;
+        manager.interactionSupport.sendErrorActionbar(player,
+            manager.messages().get("actionbar.action-unavailable"));
+        return false;
+    }
+
+    private void openPublicMenu(Player player, String menuId, Map<String, String> values,
+                                Map<String, String> states,
+                                Map<String, PublicGuiText.CycleSelection> cycles,
+                                Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries,
+                                String transitionSound) {
+        Inventory current = player.getOpenInventory().getTopInventory();
+        boolean changedScreen = !(current.getHolder() instanceof PublicGuiInventoryHolder holder
+            && holder.frame().definition().menuId().equals("orders." + menuId));
+        boolean carriesItems = current.getHolder() instanceof OrdersMenuHolder holder
+            && holder.getMenuType() == MenuType.DELIVER;
+        if (manager.isOrdersMenu(current) && !carriesItems) {
+            manager.inventoryCloseSuppressor.suppressNextClose(player);
+        }
+        try {
+            manager.publicGuis().open(player, menuId, new PublicGuiRenderInput(
+                publicValues(values), states, cycles, entries));
+            if (changedScreen) {
+                if (transitionSound != null && !transitionSound.isBlank()) {
+                    manager.playSound(player, transitionSound);
+                } else {
+                    manager.plugin.getGuiSounds().open(player);
+                }
+            }
+        } catch (IllegalStateException | IllegalArgumentException exception) {
+            manager.inventoryCloseSuppressor.clear(player);
+            manager.plugin.getLogger().severe("Could not open public GUI " + menuId + ": "
+                + exception.getMessage());
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
+        }
+    }
+
+    private static Map<Integer, PublicGuiRenderInput.EntryValue> entryAt(int slot, String id,
+                                                                         Map<String, String> values) {
+        return slot < 0 ? Map.of() : Map.of(slot, new PublicGuiRenderInput.EntryValue(id, null, values));
+    }
+
     /**
      * Re-render fresh menu templates immediately before a player sees them.
      * In-place refreshes need the same pass as newly opened menus: templates
@@ -157,7 +222,7 @@ final class OrdersMenuViewSupport {
         for (int slot = 0; slot < menu.getSize(); slot++) {
             ItemStack item = menu.getItem(slot);
             if (item != null) {
-                menu.setItem(slot, manager.itemSupport.renderForViewer(player, item));
+                putItemIfPresent(menu, slot, manager.itemSupport.renderForViewer(player, item));
             }
         }
     }
@@ -211,22 +276,40 @@ final class OrdersMenuViewSupport {
         return item;
     }
 
+    private ItemStack createSimpleItem(GuiConfigManager.GuiItem configured) {
+        ItemStack item = createSimpleItem(configured.material(), configured.name(), configured.lore(),
+            configured.customModelData());
+        item.setAmount(configured.amount());
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            OrdersMenuItemSupport.applyConfiguredFlags(meta, configured);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
     private ItemStack createGuiItem(String path, Material material, String displayName, List<String> loreLines) {
+        if (!manager.guis().itemEnabled(path)) {
+            return null;
+        }
         int revision = refreshGuiItemCachesIfNeeded();
         StaticGuiItemKey key = new StaticGuiItemKey(revision, path, material, displayName, loreLines);
         ItemStack template = staticGuiItemTemplates.computeIfAbsent(key, ignored -> {
             GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, loreLines);
-            return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
+            return createSimpleItem(item);
         });
         return template.clone();
     }
 
     private ItemStack createGuiItem(String path, Material material, String displayName, List<String> loreLines, Map<String, String> placeholders) {
+        if (!manager.guis().itemEnabled(path)) {
+            return null;
+        }
         if (placeholders == null || placeholders.isEmpty()) {
             return createGuiItem(path, material, displayName, loreLines);
         }
         GuiConfigManager.GuiItem item = manager.guis().item(path, material, displayName, loreLines, placeholders);
-        return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
+        return createSimpleItem(item);
     }
 
     private ItemStack createGuiItem(
@@ -237,6 +320,9 @@ final class OrdersMenuViewSupport {
         Map<String, String> placeholders,
         List<String> hiddenLorePlaceholders
     ) {
+        if (!manager.guis().itemEnabled(path)) {
+            return null;
+        }
         GuiConfigManager.GuiItem item = manager.guis().item(
             path,
             material,
@@ -245,39 +331,54 @@ final class OrdersMenuViewSupport {
             placeholders,
             hiddenLorePlaceholders
         );
-        return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
+        return createSimpleItem(item);
     }
 
     private ItemStack createGuiItem(String path, Material material, String displayName, List<String> fallbackLore,
                                     Map<String, String> placeholders, Map<String, List<String>> loreExpansions) {
+        if (!manager.guis().itemEnabled(path)) {
+            return null;
+        }
         GuiConfigManager.GuiItem item = manager.guis().item(
             path, material, displayName, fallbackLore, placeholders, List.of(), loreExpansions
         );
-        return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
+        return createSimpleItem(item);
     }
 
     private ItemStack createGuiCyclingItem(String path, Material material, String displayName, List<String> options, int selectedIndex, String accentColor, String defaultColor) {
+        if (!manager.guis().itemEnabled(path)) {
+            return null;
+        }
         int revision = refreshGuiItemCachesIfNeeded();
         String configuredSelectedColor = manager.messages().themeColor();
         String selectedColor = configuredSelectedColor == null || configuredSelectedColor.isBlank() ? accentColor : configuredSelectedColor;
         CyclingGuiItemKey key = new CyclingGuiItemKey(revision, path, material, displayName, options, selectedIndex, selectedColor, defaultColor);
         ItemStack template = cyclingGuiItemTemplates.computeIfAbsent(key, ignored -> {
-            List<String> information = new ArrayList<>();
-            for (int i = 0; i < options.size(); i++) {
-                boolean selected = i == selectedIndex;
-                information.add(manager.guis().text(
+            List<String> information = cycleOptionLines(options, selectedIndex, (selected, option) ->
+                manager.guis().text(
                     "items." + path + (selected ? ".selected-option" : ".other-option"),
                     (selected ? selectedColor + "» " : defaultColor + "• ") + "{option}",
-                    TextFormat.placeholders("option", options.get(i))
+                    TextFormat.placeholders("option", option)
                 ));
-            }
             GuiConfigManager.GuiItem item = manager.guis().item(
                 path, material, displayName, FoButtonStyle.buttonLore(information, "cycle"),
                 Map.of(), List.of(), Map.of("{options}", information)
             );
-            return createSimpleItem(item.material(), item.name(), item.lore(), item.customModelData());
+            return createSimpleItem(item);
         });
         return template.clone();
+    }
+
+    static List<String> cycleOptionLines(List<String> options, int selectedIndex,
+                                         BiFunction<Boolean, String, String> renderLine) {
+        List<String> lines = new ArrayList<>();
+        for (int index = 0; index < options.size(); index++) {
+            String line = renderLine.apply(index == selectedIndex, options.get(index));
+            if (line != null && !line.isEmpty()) {
+                lines.add(line);
+            }
+        }
+        return lines;
     }
 
     private String guiTitle(String path, String fallback) {
@@ -296,12 +397,26 @@ final class OrdersMenuViewSupport {
         return manager.guis().itemSlot(path, fallback, inventorySize);
     }
 
-    private List<Integer> guiSlots(String path, List<Integer> fallback, int inventorySize) {
-        return manager.guis().slots(path, fallback, inventorySize);
+    private ItemStack createSearchGuiItem(String guiPath, Player player, String searchText) {
+        String current = searchText == null || searchText.isBlank()
+            ? manager.guis().configuredText("labels." + guiPath + ".search-empty", Map.of())
+            : manager.guis().configuredText("labels." + guiPath + ".search-current",
+                TextFormat.placeholders("search", searchText));
+        return createConfiguredButton(guiPath, "search", TextFormat.placeholders("current", current));
     }
 
-    private ItemStack createSearchGuiItem(String guiPath, Player player, String searchText) {
-        return manager.guiButtons(guiPath).search(player, searchText);
+    private ItemStack createConfiguredButton(String guiPath, String key, Map<String, String> placeholders) {
+        GuiConfigManager.GuiItem item = manager.guis().button(guiPath, key, placeholders);
+        return item == null ? null : createSimpleItem(item);
+    }
+
+    private ItemStack createPageButton(String guiPath, String key, int page, int maxPage) {
+        return createConfiguredButton(guiPath, key,
+            TextFormat.placeholders("page", page + 1, "max_page", maxPage + 1));
+    }
+
+    private ItemStack createBackButton(String guiPath) {
+        return createConfiguredButton(guiPath, "back", Map.of());
     }
 
     private ItemStack createCyclingItem(Material material, String name, List<String> options, int selectedIndex) {
@@ -367,10 +482,6 @@ final class OrdersMenuViewSupport {
         return manager.itemSupport.getCachedFilteredSortedItems(itemSelectState);
     }
 
-    private ItemStack createOrderableSelectItem(OrderableItemOption option) {
-        return manager.itemSupport.createOrderableSelectItem(option);
-    }
-
     private Material resolveDraftMaterial(NewOrderDraft draft) {
         return manager.itemSupport.resolveDraftMaterial(draft);
     }
@@ -408,6 +519,7 @@ final class OrdersMenuViewSupport {
     }
 
     void openOrdersMenu(Player player, String searchText, String transitionSound) {
+        if (!publicGuiReady(player, "main")) return;
         UUID playerId = player.getUniqueId();
         manager.pendingMainMenuRefreshIds.remove(playerId);
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
@@ -419,7 +531,7 @@ final class OrdersMenuViewSupport {
             viewState.page = 1;
         }
 
-        List<Integer> orderSlots = guiSlots("layout.main.order-slots", MAIN_ORDER_SLOTS, 54);
+        List<Integer> orderSlots = manager.guis().contentSlots("main", "order-slots");
         List<MainOrderView> visibleOrders = getVisibleMainOrders(viewState, playerData);
         viewState.visibleMainOrders = visibleOrders;
         int pageCount = calculatePageCount(visibleOrders.size(), orderSlots.size());
@@ -430,10 +542,58 @@ final class OrdersMenuViewSupport {
             viewState.page = pageCount;
         }
 
-        Inventory menu = createMenu(MenuType.MAIN, 54, mainMenuTitle(viewState));
-        populateMainMenuContents(player, menu, viewState, playerData, orderSlots, visibleOrders, pageCount);
-
-        openMenu(player, menu, transitionSound);
+        Map<String, String> values = TextFormat.placeholders(
+            "page", formatCompactAmount(viewState.page),
+            "max_page", formatCompactAmount(pageCount),
+            "current", viewState.search == null || viewState.search.isBlank()
+                ? manager.guis().configuredText("labels.main.search-empty", Map.of())
+                : manager.guis().configuredText("labels.main.search-current",
+                    TextFormat.placeholders("search", viewState.search)));
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries = new HashMap<>();
+        Map<Integer, PublicGuiRenderInput.EntryValue> orderEntries = new HashMap<>();
+        int start = (viewState.page - 1) * orderSlots.size();
+        for (int offset = 0; offset < orderSlots.size() && start + offset < visibleOrders.size(); offset++) {
+            MainOrderView visible = visibleOrders.get(start + offset);
+            PlayerDataStore.OrderEntry order = visible.order();
+            ItemStack stack = createOrderStack(order, 1);
+            String itemName = order.getCustomItemId() == null
+                ? formatMaterialName(stack.getType()) : resolveTemplateDisplayName(stack);
+            orderEntries.put(orderSlots.get(offset), new PublicGuiRenderInput.EntryValue(
+                visible.ownerId() + ":" + order.getOrderId(),
+                stack,
+                TextFormat.placeholders("owner", visible.ownerName(), "item", itemName,
+                    "amount", formatCompactAmount(order.getAmountOrdered()),
+                    "delivered", formatCompactAmount(order.getAmountDelivered()),
+                    "price", formatCompactAmount(order.getPricePerItem()),
+                    "total", formatCompactAmount(order.getTotalCost()),
+                    "paid", formatCompactAmount(order.getAmountPaid())),
+                canModerateOrders(player) ? "admin" : "normal"));
+        }
+        entries.put("order-entry", orderEntries);
+        if (canOpenOwnHistory(player)) {
+            entries.put("history", entryAt(manager.guis().activeControlSlot("main.history"),
+                "history", Map.of()));
+        }
+        if (viewState.page > 1) {
+            entries.put("previous-page", entryAt(manager.guis().activeControlSlot("main.previous-page"),
+                "previous", values));
+        }
+        if (viewState.page < pageCount) {
+            entries.put("next-page", entryAt(manager.guis().activeControlSlot("main.next-page"),
+                "next", values));
+        }
+        Map<String, PublicGuiText.CycleSelection> cycles = new HashMap<>();
+        if (manager.guis().buttonEnabled("main", "sort")) {
+            List<String> options = guiLabels("main.main-sort-options", SORT_OPTIONS);
+            cycles.put("sort", new PublicGuiText.CycleSelection(options,
+                options.isEmpty() ? -1 : Math.floorMod(viewState.mainSortIndex, options.size())));
+        }
+        if (manager.guis().buttonEnabled("main", "filter")) {
+            List<String> options = guiLabels("main.filter-options", FILTER_OPTIONS);
+            cycles.put("filter", new PublicGuiText.CycleSelection(options,
+                options.isEmpty() ? -1 : Math.floorMod(viewState.mainFilterIndex, options.size())));
+        }
+        openPublicMenu(player, "main", values, Map.of(), cycles, entries, transitionSound);
     }
 
     private void prepareMainMenuState(MenuViewState viewState) {
@@ -470,23 +630,23 @@ final class OrdersMenuViewSupport {
         int searchSlot = guiItemSlot("main.search", SEARCH_SLOT, inventorySize);
         int yourOrdersSlot = guiItemSlot("main.your-orders", YOUR_ORDERS_SLOT, inventorySize);
         int historySlot = guiItemSlot("main.history", HISTORY_SLOT, inventorySize);
-        populateMainOrderFrame(menu, orderSlots);
+        populateMainOrderFrame(menu);
         populateMainOrders(player, menu, visibleOrders, viewState.page, orderSlots);
 
         if (viewState.page > 1) {
-            menu.setItem(mainBackSlot, manager.guiButtons("main").previousPage(player, viewState.page - 1, pageCount - 1));
+            putItemIfPresent(menu, mainBackSlot, createPageButton("main", "previous-page", viewState.page - 1, pageCount - 1));
         }
         if (viewState.page < pageCount) {
-            menu.setItem(mainNextSlot, manager.guiButtons("main").nextPage(player, viewState.page - 1, pageCount - 1));
+            putItemIfPresent(menu, mainNextSlot, createPageButton("main", "next-page", viewState.page - 1, pageCount - 1));
         }
 
-        menu.setItem(sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main.main-sort-options", SORT_OPTIONS), viewState.mainSortIndex, ACCENT, WHITE));
-        menu.setItem(filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("main.filter-options", FILTER_OPTIONS), viewState.mainFilterIndex, ACCENT, WHITE));
-        menu.setItem(refreshSlot, createGuiItem("main.refresh", Material.MAP, ACCENT + "ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to refresh")));
-        menu.setItem(searchSlot, createSearchGuiItem("main", player, viewState.search));
-        menu.setItem(yourOrdersSlot, createGuiItem("main.your-orders", Material.BOOK, ACCENT + "ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to view your Orders")));
+        putItemIfPresent(menu, sortSlot, createGuiCyclingItem("main.sort", Material.CAULDRON, ACCENT + "ꜱᴏʀᴛ", guiLabels("main.main-sort-options", SORT_OPTIONS), viewState.mainSortIndex, ACCENT, WHITE));
+        putItemIfPresent(menu, filterSlot, createGuiCyclingItem("main.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("main.filter-options", FILTER_OPTIONS), viewState.mainFilterIndex, ACCENT, WHITE));
+        putItemIfPresent(menu, refreshSlot, createGuiItem("main.refresh", Material.MAP, ACCENT + "ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to refresh")));
+        putItemIfPresent(menu, searchSlot, createSearchGuiItem("main", player, viewState.search));
+        putItemIfPresent(menu, yourOrdersSlot, createGuiItem("main.your-orders", Material.BOOK, ACCENT + "ʏᴏᴜʀ ᴏʀᴅᴇʀꜱ", List.of(WHITE + "Click to view your Orders")));
         if (canOpenOwnHistory(player)) {
-            menu.setItem(historySlot, createGuiItem("main.history", Material.WRITABLE_BOOK, ACCENT + "ʜɪꜱᴛᴏʀʏ", List.of(
+            putItemIfPresent(menu, historySlot, createGuiItem("main.history", Material.WRITABLE_BOOK, ACCENT + "ʜɪꜱᴛᴏʀʏ", List.of(
                 WHITE + "Click to view order history",
                 WHITE + "Switch between order and deliver tabs"
             )));
@@ -498,6 +658,7 @@ final class OrdersMenuViewSupport {
     }
 
     void openYourOrdersMenu(Player player, String transitionSound) {
+        if (!publicGuiReady(player, "your-orders")) return;
         UUID playerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         clearAdminTarget(viewState);
@@ -511,29 +672,33 @@ final class OrdersMenuViewSupport {
             playerDataStore.save(playerId);
         }
 
-        Inventory menu = createMenu(MenuType.YOUR_ORDERS, 27, guiTitle("your-orders", TITLE_YOUR_ORDERS));
-
         List<PlayerDataStore.OrderEntry> playerOrders = playerData.getOrders();
-        int newOrderSlot = guiItemSlot("your-orders.new-order", Math.min(playerOrders.size(), playerMaxOrders), 27);
+        int newOrderSlot = manager.guis().activeControlSlot("your-orders.new-order");
         List<Integer> orderSlots = yourOrderSlots(newOrderSlot);
         int displayCount = Math.min(playerOrders.size(), Math.min(playerMaxOrders, orderSlots.size()));
+        Map<Integer, PublicGuiRenderInput.EntryValue> orders = new HashMap<>();
         for (int i = 0; i < displayCount; i++) {
-            menu.setItem(orderSlots.get(i), manager.itemSupport.createOrderItem(player.getName(), playerOrders.get(i), false, "your-orders"));
+            PlayerDataStore.OrderEntry order = playerOrders.get(i);
+            ItemStack stack = createOrderStack(order, 1);
+            String itemName = order.getCustomItemId() == null
+                ? formatMaterialName(stack.getType()) : resolveTemplateDisplayName(stack);
+            orders.put(orderSlots.get(i), new PublicGuiRenderInput.EntryValue(order.getOrderId(),
+                stack, TextFormat.placeholders(
+                    "owner", player.getName(), "item", itemName,
+                    "amount", formatCompactAmount(order.getAmountOrdered()),
+                    "delivered", formatCompactAmount(order.getAmountDelivered()),
+                    "price", formatCompactAmount(order.getPricePerItem()),
+                    "total", formatCompactAmount(order.getTotalCost()),
+                    "paid", formatCompactAmount(order.getAmountPaid())), "normal"));
         }
-
-        menu.setItem(newOrderSlot, createGuiItem("your-orders.new-order", Material.MAP, ACCENT + "New Order", List.of(WHITE + "Click to create new order")));
-
-        openMenu(player, menu, transitionSound);
+        openPublicMenu(player, "your-orders", Map.of(), Map.of(), Map.of(),
+            Map.of("order-entry", orders), transitionSound);
     }
 
     List<Integer> yourOrderSlots(int newOrderSlot) {
-        List<Integer> slots = new ArrayList<>(26);
-        for (int slot = 0; slot < 27; slot++) {
-            if (slot != newOrderSlot) {
-                slots.add(slot);
-            }
-        }
-        return List.copyOf(slots);
+        boolean newOrderEnabled = manager.guis().itemEnabled("your-orders.new-order");
+        return manager.guis().contentSlots("your-orders", "order-slots").stream()
+            .filter(slot -> !newOrderEnabled || slot != newOrderSlot).toList();
     }
 
     void openNewOrderMenu(Player player) {
@@ -541,20 +706,10 @@ final class OrdersMenuViewSupport {
     }
 
     void openNewOrderMenu(Player player, String transitionSound) {
+        if (!publicGuiReady(player, "new-order")) return;
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
         viewState.newOrderConfirmLocked = false;
         NewOrderDraft draft = viewState.getOrCreateDraft();
-
-        int inventorySize = 27;
-        int cancelSlot = guiItemSlot("new-order.cancel", CANCEL_SLOT, inventorySize);
-        int itemSlot = guiItemSlot("new-order.item", ITEM_SLOT, inventorySize);
-        int amountSlot = guiItemSlot("new-order.amount", AMOUNT_SLOT, inventorySize);
-        int priceSlot = guiItemSlot("new-order.price", PRICE_SLOT, inventorySize);
-        int enchantSlot = guiItemSlot("new-order.enchants", ENCHANT_SLOT, inventorySize);
-        int confirmSlot = guiItemSlot("new-order.confirm", CONFIRM_SLOT, inventorySize);
-
-        Inventory menu = createMenu(MenuType.NEW_ORDER, inventorySize, guiTitle("new-order", TITLE_NEW_ORDER));
-        menu.setItem(cancelSlot, createGuiItem("new-order.cancel", Material.RED_STAINED_GLASS_PANE, CANCEL_RED + "ᴄᴀɴᴄᴇʟ", List.of(WHITE + "Click to return")));
 
         CustomItemStore.CustomItemDefinition customSelection = resolveCustomItemDefinition(draft.customItemId());
         if (draft.customItemId() != null && customSelection == null) {
@@ -574,68 +729,57 @@ final class OrdersMenuViewSupport {
         String selectedItemName = customSelection == null
             ? formatMaterialName(selectedMaterial)
             : resolveTemplateDisplayName(customSelection.template());
-        List<String> itemLore = new ArrayList<>();
-        itemLore.add(WHITE + "Click to choose item");
-        itemLore.add(MUTED + "(" + selectedItemName + ")");
-        if (customSelection != null) {
-            itemLore.add(MUTED + "(Custom ID: " + customSelection.id() + ")");
-        }
-        menu.setItem(itemSlot, createGuiItem("new-order.item", selectedMaterial, LIGHT_ACCENT + "ɪᴛᴇᴍ", itemLore, TextFormat.placeholders(
-            "item", selectedItemName,
-            "custom_id", customSelection == null ? "" : customSelection.id()
-        )));
-        menu.setItem(amountSlot, createGuiItem("new-order.amount", Material.CHEST, LIGHT_ACCENT + "ᴀᴍᴏᴜɴᴛ", List.of(
-            WHITE + "Click to type number of items",
-            MUTED + "(" + formatCompactAmount(draft.amount()) + ")"
-        ), TextFormat.placeholders("amount", formatCompactAmount(draft.amount()))));
-        menu.setItem(priceSlot, createGuiItem("new-order.price", Material.EMERALD, LIGHT_ACCENT + "ᴘʀɪᴄᴇ", List.of(
-            WHITE + "Click to type the price per item",
-            MUTED + "($" + formatCompactAmount(draft.pricePerItem()) + ")"
-        ), TextFormat.placeholders("price", formatCompactAmount(draft.pricePerItem()))));
-
-        if (supportsOrderEnchantments(draft.customItemId(), selectedMaterial)) {
-            List<String> enchantLore = new ArrayList<>();
-            enchantLore.add(WHITE + "Click to edit enchantments");
-            if (!sanitizedEnchantments.isEmpty()) {
-                enchantLore.addAll(buildFullEnchantmentSummaryLore(sanitizedEnchantments));
-            }
-            menu.setItem(enchantSlot, createGuiItem(
-                "new-order.enchants", Material.ENCHANTED_BOOK, LIGHT_ACCENT + "ᴇɴᴄʜᴀɴᴛꜱ", enchantLore,
-                Map.of(), Map.of("{enchantments}", buildFullEnchantmentSummaryLore(sanitizedEnchantments))
-            ));
-        }
-
         double subtotal = draft.amount() * draft.pricePerItem();
         double tax = manager.calculateOrderTax(subtotal);
         double total = manager.calculateOrderCreationCost(subtotal);
         String taxPercent = formatTaxPercentage(manager.orderTaxPercentage);
-        List<String> hiddenTaxLore = tax <= 0D ? List.of("tax", "tax_percent") : List.of();
-        List<String> confirmLore = new ArrayList<>();
-        confirmLore.add(WHITE + "Click to confirm order");
-        confirmLore.add(MUTED + "Subtotal: " + ACCENT + "$" + formatCompactAmount(subtotal));
-        if (tax > 0D) {
-            confirmLore.add(MUTED + "Tax (" + taxPercent + "%): " + ACCENT + "$" + formatCompactAmount(tax));
-        }
-        confirmLore.add(MUTED + "Total: " + CONFIRM_GREEN + "$" + formatCompactAmount(total));
-        menu.setItem(confirmSlot, createGuiItem("new-order.confirm", Material.LIME_STAINED_GLASS_PANE, CONFIRM_GREEN + "ᴄᴏɴꜰɪʀᴍ", confirmLore, TextFormat.placeholders(
+        Map<String, String> values = TextFormat.placeholders(
+            "item", selectedItemName,
+            "amount", formatCompactAmount(draft.amount()),
+            "price", formatCompactAmount(draft.pricePerItem()),
             "subtotal", formatCompactAmount(subtotal),
             "tax_percent", taxPercent,
             "tax", formatCompactAmount(tax),
-            "total", formatCompactAmount(total)
-        ), hiddenTaxLore));
-
-        openMenu(player, menu, transitionSound);
+            "total", formatCompactAmount(total));
+        ItemStack source = customSelection == null ? new ItemStack(selectedMaterial)
+            : customSelection.template().clone();
+        Map<Integer, PublicGuiRenderInput.EntryValue> itemEntry = entryAt(
+            manager.guis().activeControlSlot("new-order.item"), "draft-item", Map.of());
+        if (!itemEntry.isEmpty()) {
+            int slot = itemEntry.keySet().iterator().next();
+            itemEntry = Map.of(slot, new PublicGuiRenderInput.EntryValue("draft-item",
+                source, Map.of()));
+        }
+        Map<String, String> states = new HashMap<>();
+        states.put("confirm", tax > 0D ? "taxed" : "untaxed");
+        Map<String, PublicGuiText.CycleSelection> cycles = new HashMap<>();
+        if (supportsOrderEnchantments(draft.customItemId(), selectedMaterial)) {
+            if (manager.guis().buttonEnabled("new-order", "enchants")) {
+                cycles.put("enchants", new PublicGuiText.CycleSelection(
+                    buildFullEnchantmentSummaryLore(sanitizedEnchantments), -1));
+            }
+        } else if (manager.guis().buttonEnabled("new-order", "enchants")) {
+            states.put("enchants", "hidden");
+        }
+        openPublicMenu(player, "new-order", values, states, cycles,
+            Map.of("item", itemEntry), transitionSound);
     }
 
     void openItemSelectMenu(Player player, boolean resetPage) {
+        if (!publicGuiReady(player, "item-select")) return;
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
         ItemSelectState itemSelectState = viewState.getOrCreateItemSelectState();
+        itemSelectState.clearUnavailableControls(
+            manager.guis().itemEnabled("item-select.sort"),
+            manager.guis().itemEnabled("item-select.filter"),
+            manager.guis().buttonEnabled("item-select", "search"));
         if (resetPage) {
             itemSelectState.page = 1;
         }
 
         List<OrderableItemOption> items = getFilteredSortedItems(itemSelectState);
-        int pageCount = Math.max(1, (int) Math.ceil(items.size() / (double) ITEM_SELECT_PAGE_SIZE));
+        List<Integer> contentSlots = manager.guis().contentSlots("item-select", "content-slots");
+        int pageCount = calculatePageCount(items.size(), contentSlots.size());
         if (itemSelectState.page > pageCount) {
             itemSelectState.page = pageCount;
         }
@@ -643,50 +787,56 @@ final class OrdersMenuViewSupport {
             itemSelectState.page = 1;
         }
 
-        int inventorySize = 54;
-        int sortSlot = guiItemSlot("item-select.sort", ITEM_SELECT_SORT_SLOT, inventorySize);
-        int filterSlot = guiItemSlot("item-select.filter", ITEM_SELECT_FILTER_SLOT, inventorySize);
-        int searchSlot = guiItemSlot("item-select.search", ITEM_SELECT_SEARCH_SLOT, inventorySize);
-        int backSlot = guiItemSlot("item-select.previous-page", ITEM_SELECT_BACK_SLOT, inventorySize);
-        int returnSlot = guiItemSlot("item-select.back", ITEM_SELECT_RETURN_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("item-select.next-page", ITEM_SELECT_NEXT_SLOT, inventorySize);
-
-        Inventory menu = createMenu(MenuType.ITEM_SELECT, inventorySize, guiTitle("item-select", TITLE_SELECT_ITEM));
-        int startIndex = (itemSelectState.page - 1) * ITEM_SELECT_PAGE_SIZE;
-        for (int i = 0; i < ITEM_SELECT_PAGE_SIZE; i++) {
+        Map<String, String> values = TextFormat.placeholders(
+            "page", formatCompactAmount(itemSelectState.page),
+            "max_page", formatCompactAmount(pageCount),
+            "current", itemSelectState.search == null || itemSelectState.search.isBlank()
+                ? manager.guis().configuredText("labels.item-select.search-empty", Map.of())
+                : manager.guis().configuredText("labels.item-select.search-current",
+                    TextFormat.placeholders("search", itemSelectState.search)));
+        Map<Integer, PublicGuiRenderInput.EntryValue> choices = new HashMap<>();
+        int startIndex = (itemSelectState.page - 1) * contentSlots.size();
+        for (int i = 0; i < contentSlots.size(); i++) {
             int itemIndex = startIndex + i;
             if (itemIndex >= items.size()) {
                 break;
             }
-            menu.setItem(i, createOrderableSelectItem(items.get(itemIndex)));
+            OrderableItemOption option = items.get(itemIndex);
+            choices.put(contentSlots.get(i), manager.itemSupport.itemSelectEntryValue(option));
         }
-
-        menu.setItem(
-            sortSlot,
-            createGuiCyclingItem("item-select.sort", Material.CAULDRON, LIGHT_ACCENT + "ꜱᴏʀᴛ", guiLabels("item-select.item-sort-options", ITEM_SORT_OPTIONS), itemSelectState.sortIndex, LIGHT_ACCENT, WHITE)
-        );
-        menu.setItem(
-            filterSlot,
-            createGuiCyclingItem("item-select.filter", Material.HOPPER, ACCENT + "ꜰɪʟᴛᴇʀ", guiLabels("item-select.filter-options", FILTER_OPTIONS), itemSelectState.filterIndex, ACCENT, WHITE)
-        );
-        menu.setItem(searchSlot, createSearchGuiItem("item-select", player, itemSelectState.search));
-        menu.setItem(returnSlot, manager.guiButtons("item-select").back(player));
-
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries = new HashMap<>();
+        entries.put("entry", choices);
         if (itemSelectState.page > 1) {
-            menu.setItem(backSlot, manager.guiButtons("item-select").previousPage(player, itemSelectState.page - 1, pageCount - 1));
+            entries.put("previous-page", entryAt(
+                manager.guis().activeControlSlot("item-select.previous-page"), "previous", values));
         }
         if (itemSelectState.page < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons("item-select").nextPage(player, itemSelectState.page - 1, pageCount - 1));
+            entries.put("next-page", entryAt(
+                manager.guis().activeControlSlot("item-select.next-page"), "next", values));
         }
-
-        openMenu(player, menu);
+        Map<String, PublicGuiText.CycleSelection> cycles = new HashMap<>();
+        if (manager.guis().buttonEnabled("item-select", "sort")) {
+            List<String> options = guiLabels("item-select.item-sort-options", ITEM_SORT_OPTIONS);
+            cycles.put("sort", new PublicGuiText.CycleSelection(options,
+                options.isEmpty() ? -1 : Math.floorMod(itemSelectState.sortIndex, options.size())));
+        }
+        if (manager.guis().buttonEnabled("item-select", "filter")) {
+            List<String> options = guiLabels("item-select.filter-options", FILTER_OPTIONS);
+            cycles.put("filter", new PublicGuiText.CycleSelection(options,
+                options.isEmpty() ? -1 : Math.floorMod(itemSelectState.filterIndex, options.size())));
+        }
+        openPublicMenu(player, "item-select", values, Map.of(), cycles, entries, null);
     }
 
     void openEnchantSelectMenu(Player player, boolean resetPage) {
+        if (!publicGuiReady(player, "enchant-select")) return;
         MenuViewState viewState = menuStates.computeIfAbsent(player.getUniqueId(), ignored -> new MenuViewState());
         NewOrderDraft draft = viewState.getOrCreateDraft();
         Material material = resolveDraftMaterial(draft);
         if (!supportsOrderEnchantments(draft.customItemId(), material)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
             openNewOrderMenu(player);
             return;
         }
@@ -705,8 +855,10 @@ final class OrdersMenuViewSupport {
         if (tryOpenEnchantDialog(player, viewState, draft, material, sanitizedEnchantments, enchantments)) {
             return;
         }
+        enchantments = manager.itemSupport.getVisibleInventoryEnchantments(material);
 
-        int pageCount = Math.max(1, (int) Math.ceil(enchantments.size() / (double) ENCHANT_SELECT_PAGE_SIZE));
+        List<Integer> contentSlots = manager.guis().contentSlots("enchant-select", "content-slots");
+        int pageCount = calculatePageCount(enchantments.size(), contentSlots.size());
         if (viewState.enchantPage < 1) {
             viewState.enchantPage = 1;
         }
@@ -714,55 +866,43 @@ final class OrdersMenuViewSupport {
             viewState.enchantPage = pageCount;
         }
 
-        int inventorySize = 54;
-        int backSlot = guiItemSlot("enchant-select.previous-page", ENCHANT_SELECT_BACK_SLOT, inventorySize);
-        int returnSlot = guiItemSlot("enchant-select.back", ENCHANT_SELECT_RETURN_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("enchant-select.next-page", ENCHANT_SELECT_NEXT_SLOT, inventorySize);
-        int clearSlot = guiItemSlot("enchant-select.clear", ENCHANT_SELECT_CLEAR_SLOT, inventorySize);
-        int doneSlot = guiItemSlot("enchant-select.done", ENCHANT_SELECT_DONE_SLOT, inventorySize);
-        int controlsSlot = guiItemSlot("enchant-select.controls", ENCHANT_SELECT_INFO_SLOT, inventorySize);
-
-        Inventory menu = createMenu(MenuType.ENCHANT_SELECT, inventorySize, guiTitle("enchant-select", TITLE_ENCHANTS));
-        int startIndex = (viewState.enchantPage - 1) * ENCHANT_SELECT_PAGE_SIZE;
-        for (int i = 0; i < ENCHANT_SELECT_PAGE_SIZE; i++) {
+        Map<String, String> values = TextFormat.placeholders(
+            "page", formatCompactAmount(viewState.enchantPage),
+            "max_page", formatCompactAmount(pageCount),
+            "selected", formatCompactAmount(sanitizedEnchantments.size()));
+        Map<Integer, PublicGuiRenderInput.EntryValue> choices = new HashMap<>();
+        int startIndex = (viewState.enchantPage - 1) * contentSlots.size();
+        for (int i = 0; i < contentSlots.size(); i++) {
             int enchantIndex = startIndex + i;
             if (enchantIndex >= enchantments.size()) {
                 break;
             }
             Enchantment enchantment = enchantments.get(enchantIndex);
             int level = sanitizedEnchantments.getOrDefault(enchantment.getKey().toString(), 0);
-            menu.setItem(i, createEnchantSelectionItem(material, enchantment, level));
+            int max = Math.max(1, enchantment.getMaxLevel());
+            String current = level > 0 ? manager.guis().configuredText(
+                "labels.enchant-select.level-format", TextFormat.placeholders(
+                    "roman", manager.itemSupport.toRomanNumeral(level), "level", level))
+                : manager.guis().configuredText("labels.enchant-select.none", Map.of());
+            String maximum = manager.guis().configuredText("labels.enchant-select.level-format",
+                TextFormat.placeholders("roman", manager.itemSupport.toRomanNumeral(max), "level", max));
+            choices.put(contentSlots.get(i), new PublicGuiRenderInput.EntryValue(
+                enchantment.getKey().toString(), new ItemStack(Material.BOOK),
+                TextFormat.placeholders("enchant", formatEnchantmentName(enchantment),
+                    "current", current, "max", maximum, "item", formatMaterialName(material)),
+                level > 0 ? "selected" : "unselected"));
         }
-
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries = new HashMap<>();
+        entries.put("entry", choices);
         if (viewState.enchantPage > 1) {
-            menu.setItem(backSlot, manager.guiButtons("enchant-select").previousPage(player, viewState.enchantPage - 1, pageCount - 1));
+            entries.put("previous-page", entryAt(
+                manager.guis().activeControlSlot("enchant-select.previous-page"), "previous", values));
         }
         if (viewState.enchantPage < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons("enchant-select").nextPage(player, viewState.enchantPage - 1, pageCount - 1));
+            entries.put("next-page", entryAt(
+                manager.guis().activeControlSlot("enchant-select.next-page"), "next", values));
         }
-        menu.setItem(returnSlot, manager.guiButtons("enchant-select").back(player));
-
-        menu.setItem(
-            clearSlot,
-            createGuiItem("enchant-select.clear", Material.RED_TERRACOTTA, CANCEL_RED + "ᴄʟᴇᴀʀ", List.of(WHITE + "Click to remove all selected enchantments"))
-        );
-        menu.setItem(
-            doneSlot,
-            createGuiItem("enchant-select.done", Material.LIME_STAINED_GLASS_PANE, CONFIRM_GREEN + "ᴅᴏɴᴇ", List.of(
-                WHITE + "Click to return",
-                MUTED + "(" + formatCompactAmount(sanitizedEnchantments.size()) + " selected)"
-            ), TextFormat.placeholders("selected", formatCompactAmount(sanitizedEnchantments.size())))
-        );
-        menu.setItem(
-            controlsSlot,
-            createGuiItem("enchant-select.controls", Material.OAK_SIGN, ACCENT + "ᴄᴏɴᴛʀᴏʟꜱ", List.of(
-                WHITE + "Left click: +1 level",
-                WHITE + "Right click: -1 level",
-                WHITE + "Shift + Left: +5 levels",
-                WHITE + "Shift + Right: -5 levels"
-            ))
-        );
-        openMenu(player, menu);
+        openPublicMenu(player, "enchant-select", values, Map.of(), Map.of(), entries, null);
     }
 
     private boolean tryOpenEnchantDialog(
@@ -774,7 +914,8 @@ final class OrdersMenuViewSupport {
         List<Enchantment> enchantments
     ) {
         FoOrdersDialogInputService dialogInputService = manager.dialogInputService();
-        if (manager.isBedrockPlayer(player) || dialogInputService == null || !dialogInputService.nativeEnabled()) {
+        if (manager.isBedrockPlayer(player) || dialogInputService == null || !dialogInputService.nativeEnabled()
+            || !manager.itemSupport.enchantSelectionEntriesAvailable()) {
             return false;
         }
 
@@ -857,6 +998,9 @@ final class OrdersMenuViewSupport {
         NewOrderDraft draft = viewState.getOrCreateDraft();
         Material material = resolveDraftMaterial(draft);
         if (!supportsOrderEnchantments(draft.customItemId(), material)) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
             openNewOrderMenu(player);
             return;
         }
@@ -899,12 +1043,16 @@ final class OrdersMenuViewSupport {
     }
 
     void openManageOrderMenu(Player player, int orderIndex) {
+        if (!publicGuiReady(player, "manage-order")) return;
         UUID playerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         if (orderIndex < 0 || orderIndex >= playerData.getOrders().size()) {
             viewState.manageOrderIndex = -1;
             viewState.manageOrderId = null;
+            manager.playSound(player, GUI_ERROR_SOUND);
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
             openYourOrdersMenu(player);
             return;
         }
@@ -914,50 +1062,39 @@ final class OrdersMenuViewSupport {
         PlayerDataStore.OrderEntry order = playerData.getOrders().get(orderIndex);
         viewState.manageOrderId = order.getOrderId();
 
-        int inventorySize = 27;
-        int cancelSlot = guiItemSlot("manage-order.cancel", MANAGE_CANCEL_SLOT, inventorySize);
-        int claimSlot = guiItemSlot("manage-order.claim", MANAGE_CLAIM_SLOT, inventorySize);
-
-        Inventory menu = createMenu(MenuType.MANAGE_ORDER, inventorySize, guiTitle("manage-order", TITLE_MANAGE_ORDER));
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries = new HashMap<>();
         if (!order.isCancelled()) {
-            menu.setItem(
-                cancelSlot,
-                createGuiItem("manage-order.cancel", Material.RED_TERRACOTTA, CANCEL_RED + "ᴄᴀɴᴄᴇʟ", List.of(WHITE + "Click to cancel your order"))
-            );
+            entries.put("cancel", entryAt(manager.guis().activeControlSlot("manage-order.cancel"),
+                order.getOrderId(), Map.of()));
         }
         List<String> claimStacks = createManageClaimLore(order);
-        menu.setItem(
-            claimSlot,
-            createGuiItem(
-                "manage-order.claim",
-                Material.CHEST,
-                CONFIRM_GREEN + "ᴄʟᴀɪᴍ ᴏʀᴅᴇʀ",
-                FoButtonStyle.buttonLore(claimStacks, "claim order"),
-                Map.of(), Map.of("{claim_stacks}", claimStacks)
-            )
-        );
+        Map<String, String> values = new HashMap<>();
         if (canModerateOrders(player)) {
             double remainingFunds = getRemainingOrderFunds(order);
             String refundLine = remainingFunds > 0D
-                ? manager.guis().text("items.manage-order.admin-actions.refund-line", WHITE + "Refund owner: " + ACCENT + "${refund}",
+                ? manager.guis().configuredText("items.manage-order.admin-actions.refund-line",
                     TextFormat.placeholders("refund", formatCompactAmount(remainingFunds)))
-                : manager.guis().text("items.manage-order.admin-actions.no-refund-line", MUTED + "No refund remaining", Map.of());
-            menu.setItem(
-                MANAGE_ADMIN_ACTIONS_SLOT,
-                createGuiItem("manage-order.admin-actions", Material.LAVA_BUCKET,
-                    CANCEL_RED + "ᴀᴅᴍɪɴ ᴀᴄᴛɪᴏɴꜱ", List.of(WHITE + "Open admin moderation for this order", refundLine),
-                    TextFormat.placeholders("refund_line", refundLine))
-            );
+                : manager.guis().configuredText("items.manage-order.admin-actions.no-refund-line", Map.of());
+            values.put("refund_line", refundLine);
+            entries.put("admin-actions", entryAt(
+                manager.guis().activeControlSlot("manage-order.admin-actions"),
+                order.getOrderId(), values));
         }
-        openMenu(player, menu);
+        Map<String, PublicGuiText.CycleSelection> cycles = manager.guis().buttonEnabled("manage-order", "claim")
+            ? Map.of("claim", new PublicGuiText.CycleSelection(claimStacks, -1)) : Map.of();
+        openPublicMenu(player, "manage-order", values, Map.of(), cycles, entries, null);
     }
 
     void openClaimOrderMenu(Player player, boolean resetPage) {
+        if (!publicGuiReady(player, "claim-order")) return;
         UUID playerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
         PlayerDataStore.OrderEntry order = getSelectedOrder(playerData, viewState);
         if (order == null) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
             openYourOrdersMenu(player);
             return;
         }
@@ -978,33 +1115,35 @@ final class OrdersMenuViewSupport {
             pageStacks = getClaimSessionPageStackAmounts(claimSessionStacks, viewState.claimPage);
         }
 
-        int inventorySize = 54;
-        int backSlot = guiItemSlot("claim-order.previous-page", CLAIM_BACK_SLOT, inventorySize);
-        int returnSlot = guiItemSlot("claim-order.back", CLAIM_RETURN_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("claim-order.next-page", CLAIM_NEXT_SLOT, inventorySize);
-        int dropPageSlot = guiItemSlot("claim-order.drop-page", CLAIM_DROP_PAGE_SLOT, inventorySize);
-
-        Inventory menu = createMenu(MenuType.CLAIM_ORDER, inventorySize, guiTitle("claim-order", TITLE_CLAIM_ORDER));
-        for (int slot = 0; slot < pageStacks.size(); slot++) {
-            int stackAmount = pageStacks.get(slot);
+        List<Integer> contentSlots = manager.guis().contentSlots("claim-order", "content-slots");
+        Map<String, String> values = TextFormat.placeholders(
+            "page", formatCompactAmount(viewState.claimPage),
+            "max_page", formatCompactAmount(pageCount));
+        Map<Integer, PublicGuiRenderInput.EntryValue> stacks = new HashMap<>();
+        for (int index = 0; index < pageStacks.size() && index < contentSlots.size(); index++) {
+            int stackAmount = pageStacks.get(index);
             if (stackAmount <= 0) {
                 continue;
             }
-            menu.setItem(slot, createOrderStack(order, stackAmount));
+            ItemStack source = createOrderStack(order, stackAmount);
+            String itemName = source.getItemMeta() != null && source.getItemMeta().hasDisplayName()
+                ? source.getItemMeta().getDisplayName() : formatMaterialName(source.getType());
+            stacks.put(contentSlots.get(index), new PublicGuiRenderInput.EntryValue(
+                order.getOrderId() + ":" + ((viewState.claimPage - 1) * contentSlots.size() + index),
+                source, TextFormat.placeholders(
+                    "item", itemName, "amount", formatCompactAmount(stackAmount))));
         }
-
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> entries = new HashMap<>();
+        entries.put("entry", stacks);
         if (viewState.claimPage > 1) {
-            menu.setItem(backSlot, manager.guiButtons("claim-order").previousPage(player, viewState.claimPage - 1, pageCount - 1));
+            entries.put("previous-page", entryAt(
+                manager.guis().activeControlSlot("claim-order.previous-page"), "previous", values));
         }
         if (viewState.claimPage < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons("claim-order").nextPage(player, viewState.claimPage - 1, pageCount - 1));
+            entries.put("next-page", entryAt(
+                manager.guis().activeControlSlot("claim-order.next-page"), "next", values));
         }
-        menu.setItem(returnSlot, manager.guiButtons("claim-order").back(player));
-        menu.setItem(
-            dropPageSlot,
-            createGuiItem("claim-order.drop-page", Material.DISPENSER, MUTED + "ᴅʀᴏᴘ ᴘᴀɢᴇ", List.of(WHITE + "Drop all items on the page"))
-        );
-        openMenu(player, menu);
+        openPublicMenu(player, "claim-order", values, Map.of(), Map.of(), entries, null);
     }
 
     void openAdminOrderActionsMenu(Player player, UUID ownerId, String orderId) {
@@ -1029,8 +1168,8 @@ final class OrdersMenuViewSupport {
         double remainingFunds = getRemainingOrderFunds(order);
         String ownerName = resolvePlayerName(ownerId);
         Inventory menu = createMenu(MenuType.ADMIN_ORDER_ACTIONS, 27, TITLE_ADMIN_ACTIONS);
-        menu.setItem(ADMIN_PREVIEW_SLOT, createOrderItem(ownerName, order, false));
-        menu.setItem(
+        putItemIfPresent(menu, ADMIN_PREVIEW_SLOT, createOrderItem(ownerName, order, false));
+        putItemIfPresent(menu,
             ADMIN_DELETE_SLOT,
             createSimpleItem(Material.LAVA_BUCKET, CANCEL_RED + "ᴅᴇʟᴇᴛᴇ ᴏʀᴅᴇʀ", List.of(
                 WHITE + "Delete order and all claimable items",
@@ -1039,7 +1178,7 @@ final class OrdersMenuViewSupport {
                     : MUTED + "No refund remaining"
             ))
         );
-        menu.setItem(
+        putItemIfPresent(menu,
             ADMIN_CANCEL_SLOT,
             createSimpleItem(
                 order.isCancelled() ? Material.GRAY_STAINED_GLASS_PANE : Material.RED_TERRACOTTA,
@@ -1101,7 +1240,7 @@ final class OrdersMenuViewSupport {
                 player,
                 Material.ANVIL,
                 CONFIRM_GREEN,
-                ":anvil: Add Item",
+                "Add Item",
                 List.of(
                     WHITE + "Create a new custom order item",
                     MUTED + "Includes name, lore, model data, enchants, etc."
@@ -1149,7 +1288,7 @@ final class OrdersMenuViewSupport {
         Inventory menu = createMenu(MenuType.ADMIN_ITEM_EDIT, 54, TITLE_ADMIN_EDITOR_EDIT);
 
         String resolvedId = draft.itemId() == null ? "custom_item" : draft.itemId();
-        menu.setItem(
+        putItemIfPresent(menu,
             ADMIN_EDIT_ID_SLOT,
             EditorItemFactory.item(
                 player,
@@ -1161,13 +1300,13 @@ final class OrdersMenuViewSupport {
                 )
             )
         );
-        menu.setItem(
+        putItemIfPresent(menu,
             ADMIN_EDIT_COPY_HAND_SLOT,
             EditorItemFactory.button(
                 player,
                 Material.ANVIL,
                 ACCENT,
-                ":anvil: Set From Hand",
+                "Set From Hand",
                 List.of(
                     WHITE + "Hold the item in your main hand",
                     WHITE + "Click here to copy it as template",
@@ -1179,7 +1318,7 @@ final class OrdersMenuViewSupport {
 
         ItemStack template = draft.template();
         if (template == null || template.getType() == Material.AIR) {
-            menu.setItem(
+            putItemIfPresent(menu,
                 ADMIN_EDIT_TEMPLATE_SLOT,
                 EditorItemFactory.button(
                     player,
@@ -1212,10 +1351,10 @@ final class OrdersMenuViewSupport {
                 templateMeta.setLore(lore);
                 templatePreview.setItemMeta(templateMeta);
             }
-            menu.setItem(ADMIN_EDIT_TEMPLATE_SLOT, templatePreview);
+            putItemIfPresent(menu, ADMIN_EDIT_TEMPLATE_SLOT, templatePreview);
         }
 
-        menu.setItem(
+        putItemIfPresent(menu,
             ADMIN_EDIT_ENCHANTABLE_SLOT,
             EditorItemFactory.button(
                 player,
@@ -1230,7 +1369,7 @@ final class OrdersMenuViewSupport {
                 "toggle order enchants"
             )
         );
-        menu.setItem(
+        putItemIfPresent(menu,
             ADMIN_EDIT_SAVE_SLOT,
             EditorItemFactory.button(
                 player,
@@ -1241,13 +1380,13 @@ final class OrdersMenuViewSupport {
                 "save the custom item"
             )
         );
-        menu.setItem(
+        putItemIfPresent(menu,
             ADMIN_EDIT_CANCEL_SLOT,
             manager.guiButtons().back(player)
         );
 
         if (draft.existingId() != null) {
-            menu.setItem(
+            putItemIfPresent(menu,
                 ADMIN_EDIT_DELETE_SLOT,
                 EditorItemFactory.button(
                     player,
@@ -1301,45 +1440,59 @@ final class OrdersMenuViewSupport {
         PlayerDataStore.PlayerData ownerData = playerDataStore.getOrCreate(selectedOrder.ownerId());
         PlayerDataStore.OrderEntry liveOrder = findOrderById(ownerData, selectedOrder.order().getOrderId());
         if (liveOrder == null || liveOrder.isCancelled()) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
             openOrdersMenu(player, null);
             return;
         }
 
         int remainingNeeded = Math.max(0, liveOrder.getAmountOrdered() - liveOrder.getAmountDelivered());
         if (remainingNeeded <= 0) {
+            manager.playSound(player, GUI_ERROR_SOUND);
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
             openOrdersMenu(player, null);
             return;
         }
 
-        PendingDeliveryState pending = new PendingDeliveryState(selectedOrder.ownerId(), liveOrder.getOrderId(), null);
-        pendingDeliveries.put(delivererId, pending);
-        Inventory menu = createMenu(MenuType.DELIVER, 36, guiTitle("deliver", TITLE_DELIVER));
-        openMenu(player, menu, ORDER_DELIVERY_OPEN_SOUND);
+        Inventory menu;
+        try {
+            PublicGuiFrame frame = manager.publicGuis().service("deliver").plan("orders.deliver",
+                new PublicGuiRenderInput(publicValues(Map.of()), Map.of(), Map.of(), Map.of()));
+            menu = createMenu(MenuType.DELIVER, frame.definition().size(), frame.title());
+            PublicGuiRenderer.renderInto(player, menu, frame);
+        } catch (IllegalStateException | IllegalArgumentException exception) {
+            manager.plugin.getLogger().severe("Could not open delivery GUI: " + exception.getMessage());
+            manager.interactionSupport.sendErrorActionbar(player,
+                manager.messages().get("actionbar.action-unavailable"));
+            return;
+        }
+        pendingDeliveries.put(delivererId,
+            new PendingDeliveryState(selectedOrder.ownerId(), liveOrder.getOrderId(), null));
+        manager.playSound(player, ORDER_DELIVERY_OPEN_SOUND);
+        manager.itemSupport.openMenu(player, menu);
     }
 
     void openDeliveryConfirmMenu(Player player) {
-        int inventorySize = 27;
-        int cancelSlot = guiItemSlot("delivery-confirm.cancel", DELIVERY_CANCEL_SLOT, inventorySize);
-        int confirmSlot = guiItemSlot("delivery-confirm.confirm", DELIVERY_CONFIRM_SLOT, inventorySize);
-        Inventory menu = createMenu(MenuType.DELIVERY_CONFIRM, inventorySize, guiTitle("delivery-confirm", TITLE_DELIVERY_CONFIRM));
-        menu.setItem(cancelSlot, createGuiItem("delivery-confirm.cancel", Material.RED_STAINED_GLASS_PANE, CANCEL_RED + "ᴄᴀɴᴄᴇʟ", List.of(WHITE + "Click to return")));
-        menu.setItem(confirmSlot, createGuiItem("delivery-confirm.confirm", Material.LIME_STAINED_GLASS_PANE, CONFIRM_GREEN + "ᴄᴏɴꜰɪʀᴍ", List.of(WHITE + "Click to confirm order")));
-        openMenu(player, menu, ORDER_DELIVERY_CONFIRM_SOUND);
+        if (!publicGuiReady(player, "delivery-confirm")) {
+            manager.interactionSupport.deliverySupport.returnAndClearPendingDelivery(
+                player, player.getUniqueId());
+            return;
+        }
+        openPublicMenu(player, "delivery-confirm", Map.of(), Map.of(), Map.of(), Map.of(),
+            ORDER_DELIVERY_CONFIRM_SOUND);
     }
 
     void openHistoryMenu(Player viewer, UUID targetPlayerId, HistoryDataStore.HistoryType historyType, boolean fromAdminCommand) {
         if (!manager.historyEnabled) {
-            manager.messages().send(viewer, "history.disabled-config");
+            notifyHistoryUnavailable(viewer, targetPlayerId, fromAdminCommand);
             return;
         }
 
         UUID resolvedTargetId = targetPlayerId == null ? viewer.getUniqueId() : targetPlayerId;
         if (!canAccessHistory(viewer, resolvedTargetId)) {
-            if (fromAdminCommand) {
-                manager.messages().send(viewer, "history.access-denied-player");
-            } else {
-                manager.messages().send(viewer, "history.access-denied");
-            }
+            notifyHistoryUnavailable(viewer, resolvedTargetId, fromAdminCommand);
             return;
         }
 
@@ -1352,11 +1505,13 @@ final class OrdersMenuViewSupport {
     }
 
     void openHistoryMenu(Player player, boolean resetPage) {
+        if (!publicGuiReady(player, "history")) return;
         UUID viewerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(viewerId, ignored -> new MenuViewState());
         HistoryDataStore.HistoryType activeType = viewState.historyType == null ? HistoryDataStore.HistoryType.ORDER : viewState.historyType;
         UUID targetPlayerId = viewState.historyTargetId == null ? viewerId : viewState.historyTargetId;
         if (!canAccessHistory(player, targetPlayerId)) {
+            notifyHistoryUnavailable(player, targetPlayerId, false);
             openOrdersMenu(player, null);
             return;
         }
@@ -1365,11 +1520,15 @@ final class OrdersMenuViewSupport {
             viewState.historyPage = 1;
         }
 
-        List<HistoryDataStore.HistoryEntry> entries = activeType == HistoryDataStore.HistoryType.ORDER
-            ? historyDataStore.getOrderHistory(targetPlayerId)
-            : historyDataStore.getDeliverHistory(targetPlayerId);
+        String entryState = activeType == HistoryDataStore.HistoryType.ORDER ? "order" : "deliver";
+        List<HistoryDataStore.HistoryEntry> entries = !manager.guis().sourceEntryStateEnabled("history.entry", entryState)
+            ? List.of()
+            : activeType == HistoryDataStore.HistoryType.ORDER
+                ? historyDataStore.getOrderHistory(targetPlayerId)
+                : historyDataStore.getDeliverHistory(targetPlayerId);
 
-        int pageCount = calculatePageCount(entries.size(), HISTORY_PAGE_CAPACITY);
+        List<Integer> contentSlots = manager.guis().contentSlots("history", "content-slots");
+        int pageCount = calculatePageCount(entries.size(), contentSlots.size());
         if (viewState.historyPage < 1) {
             viewState.historyPage = 1;
         }
@@ -1381,113 +1540,142 @@ final class OrdersMenuViewSupport {
         String tabName = activeType == HistoryDataStore.HistoryType.ORDER
             ? manager.guis().text("labels.history.order-tab-title", "ᴏʀᴅᴇʀ", Map.of())
             : manager.guis().text("labels.history.deliver-tab-title", "ᴅᴇʟɪᴠᴇʀ", Map.of());
-        int inventorySize = 54;
-        int infoSlot = guiItemSlot("history.info", HISTORY_INFO_SLOT, inventorySize);
-        int orderTabSlot = guiItemSlot("history.order-tab", HISTORY_ORDER_TAB_SLOT, inventorySize);
-        int deliverTabSlot = guiItemSlot("history.deliver-tab", HISTORY_DELIVER_TAB_SLOT, inventorySize);
-        int backToOrdersSlot = guiItemSlot("history.back-to-orders", HISTORY_BACK_TO_ORDERS_SLOT, inventorySize);
-        int backSlot = guiItemSlot("history.previous-page", HISTORY_BACK_SLOT, inventorySize);
-        int nextSlot = guiItemSlot("history.next-page", HISTORY_NEXT_SLOT, inventorySize);
-
-        Inventory menu = createMenu(MenuType.HISTORY, inventorySize, guiTitle(
-            "history",
-            TITLE_HISTORY_PREFIX + " • " + tabName,
-            TextFormat.placeholders("tab", tabName)
-        ));
-        int startIndex = (viewState.historyPage - 1) * HISTORY_PAGE_CAPACITY;
-        for (int slot = 0; slot < HISTORY_PAGE_CAPACITY; slot++) {
-            int historyIndex = startIndex + slot;
+        Map<String, String> values = TextFormat.placeholders(
+            "tab", tabName, "target", targetName,
+            "page", formatCompactAmount(viewState.historyPage),
+            "max_page", formatCompactAmount(pageCount),
+            "pages", formatCompactAmount(pageCount),
+            "entries", formatCompactAmount(entries.size()));
+        Map<Integer, PublicGuiRenderInput.EntryValue> rows = new HashMap<>();
+        int startIndex = (viewState.historyPage - 1) * contentSlots.size();
+        for (int index = 0; index < contentSlots.size(); index++) {
+            int historyIndex = startIndex + index;
             if (historyIndex >= entries.size()) {
                 break;
             }
-            menu.setItem(slot, createHistoryEntryItem(activeType, entries.get(historyIndex), targetName));
+            HistoryDataStore.HistoryEntry historyEntry = entries.get(historyIndex);
+            rows.put(contentSlots.get(index), new PublicGuiRenderInput.EntryValue(
+                activeType + ":" + historyIndex + ":" + historyEntry.timestamp(),
+                new ItemStack(Material.BOOK), historyEntryValues(historyEntry, targetName), entryState));
         }
-
-        menu.setItem(
-            infoSlot,
-            createGuiItem(
-                "history.info",
-                Material.OAK_SIGN,
-                ACCENT + "ᴠɪᴇᴡɪɴɢ",
-                List.of(
-                    WHITE + targetName,
-                    MUTED + "Page " + formatCompactAmount(viewState.historyPage) + "/" + formatCompactAmount(pageCount),
-                    MUTED + "Entries: " + formatCompactAmount(entries.size())
-                ),
-                TextFormat.placeholders(
-                    "target", targetName,
-                    "page", formatCompactAmount(viewState.historyPage),
-                    "pages", formatCompactAmount(pageCount),
-                    "entries", formatCompactAmount(entries.size())
-                )
-            )
-        );
-        menu.setItem(
-            orderTabSlot,
-            createGuiItem(
-                "history.order-tab",
-                activeType == HistoryDataStore.HistoryType.ORDER ? Material.WRITABLE_BOOK : Material.BOOK,
-                (activeType == HistoryDataStore.HistoryType.ORDER ? CONFIRM_GREEN : ACCENT) + "ᴏʀᴅᴇʀ ʜɪꜱᴛᴏʀʏ",
-                List.of(
-                    activeType == HistoryDataStore.HistoryType.ORDER
-                        ? MUTED + "Current tab"
-                        : WHITE + "Click to switch"
-                )
-            )
-        );
-        menu.setItem(
-            deliverTabSlot,
-            createGuiItem(
-                "history.deliver-tab",
-                activeType == HistoryDataStore.HistoryType.DELIVER ? Material.MINECART : Material.CHEST_MINECART,
-                (activeType == HistoryDataStore.HistoryType.DELIVER ? CONFIRM_GREEN : ACCENT) + "ᴅᴇʟɪᴠᴇʀ ʜɪꜱᴛᴏʀʏ",
-                List.of(
-                    activeType == HistoryDataStore.HistoryType.DELIVER
-                        ? MUTED + "Current tab"
-                        : WHITE + "Click to switch"
-                )
-            )
-        );
-        menu.setItem(
-            backToOrdersSlot,
-            manager.guiButtons("history").back(player)
-        );
-
+        Map<String, Map<Integer, PublicGuiRenderInput.EntryValue>> shown = new HashMap<>();
+        shown.put("entry", rows);
         if (viewState.historyPage > 1) {
-            menu.setItem(backSlot, manager.guiButtons("history").previousPage(player, viewState.historyPage - 1, pageCount - 1));
+            shown.put("previous-page", entryAt(
+                manager.guis().activeControlSlot("history.previous-page"), "previous", values));
         }
         if (viewState.historyPage < pageCount) {
-            menu.setItem(nextSlot, manager.guiButtons("history").nextPage(player, viewState.historyPage - 1, pageCount - 1));
+            shown.put("next-page", entryAt(
+                manager.guis().activeControlSlot("history.next-page"), "next", values));
         }
-        openMenu(player, menu);
+        openPublicMenu(player, "history", values,
+            Map.of("order-tab", activeType == HistoryDataStore.HistoryType.ORDER ? "selected" : "unselected",
+                "deliver-tab", activeType == HistoryDataStore.HistoryType.DELIVER ? "selected" : "unselected"),
+            Map.of(), shown, null);
+    }
+
+    void notifyHistoryUnavailable(Player viewer, UUID targetPlayerId, boolean fromAdminCommand) {
+        boolean viewingAnotherPlayer = targetPlayerId != null && !viewer.getUniqueId().equals(targetPlayerId);
+        manager.messages().send(viewer, historyAccessFeedbackPath(
+            manager.historyEnabled, fromAdminCommand || viewingAnotherPlayer));
+    }
+
+    static String historyAccessFeedbackPath(boolean historyEnabled, boolean viewingAnotherPlayer) {
+        if (!historyEnabled) {
+            return "history.disabled-config";
+        }
+        return viewingAnotherPlayer ? "history.access-denied-player" : "history.access-denied";
+    }
+
+    private ItemStack createHistoryTab(String key, boolean selected) {
+        String path = "history." + key;
+        Material icon = manager.guis().stateMaterial(path, selected);
+        if (icon == null) {
+            return null;
+        }
+        String state = selected ? "selected" : "unselected";
+        String color = manager.guis().stateColor(path, selected);
+        String name = manager.guis().configuredText("items." + path + "." + state + "-name",
+            TextFormat.placeholders("state_color", color));
+        List<String> stateLore = manager.guis().lines("items." + path + "." + state + "-lore",
+            Map.of(), Map.of());
+        return createGuiItem(path, icon, "", List.of(),
+            TextFormat.placeholders("state_color", color, "state_name", name),
+            Map.of("{state_lore}", stateLore));
     }
 
     ItemStack createHistoryEntryItem(HistoryDataStore.HistoryType historyType, HistoryDataStore.HistoryEntry entry, String targetName) {
-        Material icon = historyType == HistoryDataStore.HistoryType.ORDER ? Material.WRITABLE_BOOK : Material.CHEST_MINECART;
-        String timestamp = entry.timestamp() > 0L
-            ? historyTimestampFormatter.format(Instant.ofEpochMilli(entry.timestamp()))
-            : manager.guis().text("labels.history.unknown-time", "Unknown", Map.of());
-        return createGuiItem(
-            "history.entry",
-            icon,
-            ACCENT + sanitizeHistoryLabel(entry.action()),
-            List.of(
-                WHITE + sanitizeHistoryLabel(entry.details()),
-                MUTED + "Player: " + targetName,
-                MUTED + "Time: " + timestamp
-            ),
-            TextFormat.placeholders(
-                "action", sanitizeHistoryLabel(entry.action()),
-                "details", sanitizeHistoryLabel(entry.details()),
-                "target", targetName,
-                "time", timestamp
-            )
-        );
+        Material icon = manager.guis().stateMaterial("history.entry",
+            historyType == HistoryDataStore.HistoryType.ORDER ? "order" : "deliver");
+        if (icon == null) {
+            return null;
+        }
+        Map<String, String> values = historyEntryValues(entry, targetName);
+        return createGuiItem("history.entry", icon, ACCENT + values.get("action"),
+            List.of(WHITE + values.get("details"), MUTED + values.get("target"),
+                MUTED + values.get("time")), values);
     }
 
-    String sanitizeHistoryLabel(String value) {
+    private Map<String, String> historyEntryValues(HistoryDataStore.HistoryEntry entry, String targetName) {
+        String timestamp = entry.timestamp() > 0L
+            ? formatHistoryTimestamp(entry.timestamp())
+            : manager.guis().configuredText("labels.history.unknown-time", Map.of());
+        String action;
+        String details;
+        if (entry.eventKey().isBlank()) {
+            action = sanitizeHistoryLabel(entry.action(), "labels.history.unknown-event");
+            details = sanitizeHistoryLabel(entry.details(), "labels.history.unknown-details");
+        } else {
+            Map<String, String> values = new HashMap<>(entry.values());
+            values.put("item", manager.itemSupport.formatHistoryItem(entry.values()));
+            for (String numberKey : List.of("amount", "price", "subtotal", "tax", "total", "payout", "refund")) {
+                if (values.containsKey(numberKey)) {
+                    try {
+                        values.put(numberKey, formatCompactAmount(Double.parseDouble(values.get(numberKey))));
+                    } catch (NumberFormatException exception) {
+                        values.put(numberKey, "");
+                    }
+                }
+            }
+            String root = "events.history." + entry.eventKey();
+            action = manager.guis().configuredText(root + ".action", values);
+            details = manager.guis().configuredText(root + ".details", values);
+            if (!HISTORY_EVENT_KEYS.contains(entry.eventKey())) {
+                if (!manager.guis().has(root + ".action")) {
+                    action = manager.guis().configuredText("labels.history.unknown-event", Map.of());
+                }
+                if (!manager.guis().has(root + ".details")) {
+                    details = manager.guis().configuredText("labels.history.unknown-details", Map.of());
+                }
+            }
+        }
+        return TextFormat.placeholders(
+                "action", action,
+                "details", details,
+                "target", targetName,
+                "time", timestamp
+            );
+    }
+
+    private String formatHistoryTimestamp(long timestamp) {
+        String pattern = manager.guis().rawString("labels.history.timestamp-pattern");
+        String language = manager.guis().rawString("labels.history.timestamp-locale");
+        String zoneText = manager.guis().rawString("labels.history.timestamp-zone");
+        if (pattern.isBlank() || language.isBlank() || zoneText.isBlank()) {
+            return manager.guis().configuredText("labels.history.unknown-time", Map.of());
+        }
+        try {
+            ZoneId zone = zoneText.equalsIgnoreCase("system") ? ZoneId.systemDefault() : ZoneId.of(zoneText);
+            return DateTimeFormatter.ofPattern(pattern, Locale.forLanguageTag(language))
+                .withZone(zone).format(Instant.ofEpochMilli(timestamp));
+        } catch (IllegalArgumentException exception) {
+            return manager.guis().configuredText("labels.history.unknown-time", Map.of());
+        }
+    }
+
+    String sanitizeHistoryLabel(String value, String emptyLabelPath) {
         if (value == null || value.isBlank()) {
-            return manager.guis().text("labels.history.unknown-event", "Event", Map.of());
+            return manager.guis().configuredText(emptyLabelPath, Map.of());
         }
         return value;
     }
@@ -1518,7 +1706,7 @@ final class OrdersMenuViewSupport {
                 return;
             }
             Inventory topInventory = player.getOpenInventory().getTopInventory();
-            if (!(topInventory.getHolder() instanceof OrdersMenuHolder holder) || holder.getMenuType() != MenuType.MAIN) {
+            if (!isPublicMenu(topInventory, "main")) {
                 return;
             }
             if (!refreshOpenMainMenuInPlace(player)) {
@@ -1544,7 +1732,7 @@ final class OrdersMenuViewSupport {
                 return;
             }
             Inventory topInventory = player.getOpenInventory().getTopInventory();
-            if (!(topInventory.getHolder() instanceof OrdersMenuHolder holder) || holder.getMenuType() != MenuType.ITEM_SELECT) {
+            if (!isPublicMenu(topInventory, "item-select")) {
                 return;
             }
             openItemSelectMenu(player, false);
@@ -1555,42 +1743,23 @@ final class OrdersMenuViewSupport {
         if (player == null || !player.isOnline()) {
             return false;
         }
-
         Inventory topInventory = player.getOpenInventory().getTopInventory();
-        if (!(topInventory.getHolder() instanceof OrdersMenuHolder holder) || holder.getMenuType() != MenuType.MAIN) {
+        if (!isPublicMenu(topInventory, "main")) {
             return false;
         }
-        if (holder.getGuiRevision() != manager.guis().revision() || topInventory.getSize() != 54) {
-            return false;
-        }
-
-        UUID playerId = player.getUniqueId();
-        MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
-        PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
-        prepareMainMenuState(viewState);
-
-        List<Integer> orderSlots = guiSlots("layout.main.order-slots", MAIN_ORDER_SLOTS, topInventory.getSize());
-        List<MainOrderView> visibleOrders = getVisibleMainOrders(viewState, playerData);
-        viewState.visibleMainOrders = visibleOrders;
-        int pageCount = calculatePageCount(visibleOrders.size(), orderSlots.size());
-        if (viewState.page < 1) {
-            viewState.page = 1;
-        }
-        if (viewState.page > pageCount) {
-            viewState.page = pageCount;
-        }
-
-        if (!mainMenuTitle(viewState).equals(holder.getTitle())) {
-            return false;
-        }
-
-        populateMainMenuContents(player, topInventory, viewState, playerData, orderSlots, visibleOrders, pageCount);
-        renderMenuContentsForViewer(player, topInventory);
-        player.updateInventory();
+        openOrdersMenu(player, null);
         return true;
     }
 
+    private static boolean isPublicMenu(Inventory inventory, String key) {
+        return inventory.getHolder() instanceof PublicGuiInventoryHolder holder
+            && holder.frame().definition().menuId().equals("orders." + key);
+    }
+
     List<MainOrderView> getVisibleMainOrders(MenuViewState viewState, PlayerDataStore.PlayerData playerData) {
+        if (!manager.guis().itemEnabled("main.order-entry")) {
+            return List.of();
+        }
         List<PlayerDataStore.PlayerOrderRecord> allOrders = playerDataStore.getAllOrdersSnapshot();
         String searchLower = viewState.search.toLowerCase(Locale.ROOT);
 
@@ -1650,36 +1819,25 @@ final class OrdersMenuViewSupport {
                 break;
             }
             MainOrderView orderView = visibleOrders.get(index);
-            menu.setItem(orderSlots.get(slotIndex), createOrderItem(orderView.ownerName(), orderView.order(), canModerate));
+            putItemIfPresent(menu, orderSlots.get(slotIndex), createOrderItem(orderView.ownerName(), orderView.order(), canModerate));
         }
     }
 
-    void populateMainOrderFrame(Inventory menu, List<Integer> orderSlots) {
+    void populateMainOrderFrame(Inventory menu) {
         ItemStack grayPane = createGuiItem("main.gray-pane", Material.GRAY_STAINED_GLASS_PANE, "", List.of());
         ItemStack emptyOrderPane = createGuiItem("main.empty-order-slot", Material.LIGHT_GRAY_STAINED_GLASS_PANE, "", List.of());
-
-        for (int column = 0; column < 9; column++) {
-            setFrameItem(menu, column, grayPane);
-            setFrameItem(menu, 36 + column, grayPane);
-            setFrameItem(menu, 45 + column, grayPane);
+        for (int slot : manager.guis().contentSlots("main", "frame-slots")) {
+            setFrameItem(menu, slot, grayPane);
         }
-
-        for (int row = 1; row <= 3; row++) {
-            int rowStart = row * 9;
-            setFrameItem(menu, rowStart, grayPane);
-            setFrameItem(menu, rowStart + 8, grayPane);
-            for (int column = 1; column <= 7; column++) {
-                setFrameItem(menu, rowStart + column, emptyOrderPane);
-            }
-        }
-
-        for (int slot : orderSlots) {
+        for (int slot : manager.guis().contentSlots("main", "empty-slots")) {
             setFrameItem(menu, slot, emptyOrderPane);
         }
     }
 
     private void setFrameItem(Inventory menu, int slot, ItemStack item) {
-        menu.setItem(slot, item.clone());
+        if (item != null) {
+            putItemIfPresent(menu, slot, item.clone());
+        }
     }
 
     private int refreshGuiItemCachesIfNeeded() {
@@ -1723,6 +1881,6 @@ final class OrdersMenuViewSupport {
     }
 
     int calculatePageCount(int totalItems, int pageSize) {
-        return Math.max(1, (int) Math.ceil(totalItems / (double) pageSize));
+        return pageSize <= 0 ? 1 : Math.max(1, (int) Math.ceil(totalItems / (double) pageSize));
     }
 }

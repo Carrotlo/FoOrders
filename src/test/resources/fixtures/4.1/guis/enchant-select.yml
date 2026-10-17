@@ -1,0 +1,81 @@
+# Public enchantment selection menu.
+title: "&8ᴇɴᴄʜᴀɴᴛꜱ"
+
+buttons:
+  back:
+    material: IRON_DOOR
+    name: "{theme}&lBACK"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fReturn to the previous menu."
+      - " "
+      - "{good}→ Click to Go Back ←"
+  previous-page:
+    material: ARROW
+    name: "{theme}&lPREVIOUS PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Previous Page ←"
+  next-page:
+    material: ARROW
+    name: "{theme}&lNEXT PAGE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fPage {page}/{max_page}."
+      - " "
+      - "{good}→ Click to Next Page ←"
+  search:
+    material: NAME_TAG
+    name: "{theme}&lSEARCH"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fCurrent: {current}"
+      - " "
+      - "{good}→ Click to Search ←"
+
+items:
+  previous-page:
+    slot: 45
+  next-page:
+    slot: 53
+  clear:
+    slot: 48
+    material: RED_TERRACOTTA
+    name: "#ff5d73&lCLEAR"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fRemove all selected enchantments."
+      - " "
+      - "{good}→ Click to Clear ←"
+  done:
+    slot: 49
+    material: LIME_STAINED_GLASS_PANE
+    name: "#3ecf8e&lDONE"
+    lore:
+      - "&8ʙᴜᴛᴛᴏɴ"
+      - " "
+      - "&eⓘ Information ↓"
+      - "&7&l | &fSelected enchantments: {selected}"
+      - " "
+      - "{good}→ Click to Continue ←"
+  controls:
+    slot: 50
+    material: OAK_SIGN
+    name: "{theme}ᴄᴏɴᴛʀᴏʟꜱ"
+    lore:
+      - "#ffffffLeft click: +1 level"
+      - "#ffffffRight click: -1 level"
+      - "#ffffffShift + Left: +5 levels"
+      - "#ffffffShift + Right: -5 levels"
