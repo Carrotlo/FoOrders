@@ -236,6 +236,7 @@ public final class OrdersMenuManager implements Listener {
     final Map<UUID, PendingDeliveryState> pendingDeliveries = new ConcurrentHashMap<>();
     final Set<UUID> handledDeliveryClosePlayers = ConcurrentHashMap.newKeySet();
     final Set<String> activeOrderOperationLocks = ConcurrentHashMap.newKeySet();
+    final Set<UUID> activeCreateOwners = ConcurrentHashMap.newKeySet();
     final Set<UUID> waitingDeliveryPlayers = ConcurrentHashMap.newKeySet();
     final Object economyLock = new Object();
     volatile Set<Material> blacklistedOrderMaterials = Set.of();

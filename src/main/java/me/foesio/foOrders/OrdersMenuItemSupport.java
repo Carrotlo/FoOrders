@@ -96,7 +96,8 @@ final class OrdersMenuItemSupport {
         String price = formatCompactAmount(order.getPricePerItem());
         String total = formatCompactAmount(order.getTotalCost());
         String paid = formatCompactAmount(order.getAmountPaid());
-        String paidLeft = formatCompactAmount(Math.max(0D, order.getTotalCost() - order.getAmountPaid()));
+        String paidLeft = formatCompactAmount(order.getNpcName() == null
+            ? Math.max(0D, order.getTotalCost() - order.getAmountPaid()) : 0D);
         Map<String, String> placeholders = TextFormat.placeholders(
             "owner", ownerName,
             "item", materialName,

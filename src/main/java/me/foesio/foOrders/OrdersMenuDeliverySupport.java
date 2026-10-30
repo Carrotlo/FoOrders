@@ -2,6 +2,14 @@ package me.foesio.foOrders;
 
 import me.foesio.core.inventory.InventoryDepositService;
 import me.foesio.core.inventory.OverflowPolicy;
+import me.foesio.foOrders.api.OrderActionResult;
+import me.foesio.foOrders.api.OrderSnapshot;
+import me.foesio.foOrders.api.event.OrderCancelledEvent;
+import me.foesio.foOrders.api.event.OrderClosedEvent;
+import me.foesio.foOrders.api.event.OrderDeletedByAdminEvent;
+import me.foesio.foOrders.api.event.OrderDeliveryAcceptedEvent;
+import me.foesio.foOrders.api.event.OrderFilledEvent;
+import me.foesio.foOrders.api.event.OrderItemsClaimedEvent;
 import me.foesio.foOrders.integration.DiscordWebhookNotifier;
 import me.foesio.core.scheduler.FoScheduler;
 import me.foesio.foOrders.storage.HistoryDataStore;
@@ -260,6 +268,10 @@ final class OrdersMenuDeliverySupport {
             playerDataStore.saveUrgent(playerId);
             appendOrderEvent(playerId, "order-claimed-inventory", selectedOrder,
                 TextFormat.placeholders("amount", transferred));
+            OrderSnapshot claimedSnapshot = OrderSnapshots.of(playerId, selectedOrder);
+            manager.plugin.getServer().getPluginManager().callEvent(new OrderItemsClaimedEvent(
+                claimedSnapshot, playerId, transferred, OrderItemsClaimedEvent.Method.INVENTORY));
+            if (removed) publishClosed(claimedSnapshot, playerId);
             manager.fileLogger().info(
                 "Player " + player.getName() + " claimed "
                     + formatCompactAmount(transferred) + "x " + formatOrderDisplayName(selectedOrder)
@@ -426,17 +438,27 @@ final class OrdersMenuDeliverySupport {
         }
 
         if (acceptedAmount > 0) {
-            liveOrder.setAmountDelivered(liveOrder.getAmountDelivered() + acceptedAmount);
-            liveOrder.setAmountClaimable(liveOrder.getAmountClaimable() + acceptedAmount);
-            liveOrder.setAmountPaid(liveOrder.getAmountPaid() + payout);
+            boolean wasFilled = liveOrder.getAmountDelivered() >= liveOrder.getAmountOrdered();
+            boolean npcFilled = liveOrder.recordDelivery(acceptedAmount, payout);
+            if (npcFilled) ownerData.getOrders().remove(liveOrder);
             playerDataStore.saveUrgent(activePending.ownerId());
 
-            String ownerName = resolvePlayerName(activePending.ownerId());
+            String ownerName = liveOrder.getNpcName() == null
+                ? resolvePlayerName(activePending.ownerId()) : liveOrder.getNpcName();
             String itemName = formatOrderDisplayName(liveOrder);
             appendOrderEvent(activePending.ownerId(), "order-delivered", liveOrder,
                 TextFormat.placeholders("actor", player.getName(), "amount", acceptedAmount));
             appendDeliverEvent(delivererId, "delivery-completed", liveOrder,
                 TextFormat.placeholders("amount", acceptedAmount, "owner", ownerName, "payout", payout));
+            OrderSnapshot deliveredSnapshot = OrderSnapshots.of(activePending.ownerId(), liveOrder);
+            manager.plugin.getServer().getPluginManager().callEvent(
+                new OrderDeliveryAcceptedEvent(deliveredSnapshot, delivererId, acceptedAmount, payout));
+            if (!wasFilled && !deliveredSnapshot.acceptsDeliveries()) {
+                manager.plugin.getServer().getPluginManager().callEvent(
+                    new OrderFilledEvent(deliveredSnapshot, delivererId));
+            }
+            if (npcFilled) manager.plugin.getServer().getPluginManager().callEvent(
+                new OrderClosedEvent(deliveredSnapshot, delivererId, OrderClosedEvent.Reason.NPC_FILLED));
             manager.fileLogger().info(
                 "Player " + player.getName() + " delivered "
                     + formatCompactAmount(acceptedAmount) + "x " + itemName
@@ -446,7 +468,7 @@ final class OrdersMenuDeliverySupport {
             sendOrderDeliveredWebhook(player, ownerName, liveOrder, acceptedAmount, payout);
             manager.playSound(player, ORDER_DELIVERED_SOUND);
             manager.messages().send(player, "orders.delivered", PluginMessages.placeholders("payout", formatCompactAmount(payout)));
-            Player orderOwner = Bukkit.getPlayer(activePending.ownerId());
+            Player orderOwner = liveOrder.getNpcName() == null ? Bukkit.getPlayer(activePending.ownerId()) : null;
             if (orderOwner != null && orderOwner.isOnline()) {
                 manager.playSound(orderOwner, ORDER_DELIVERED_SOUND);
                 manager.messages().send(orderOwner, "orders.owner-delivered", PluginMessages.placeholders(
@@ -566,6 +588,50 @@ final class OrdersMenuDeliverySupport {
         return acceptedLeft;
     }
 
+    OrderActionResult cancelOrder(Player player, String orderId) {
+        if (player == null || !player.isOnline()) {
+            return new OrderActionResult(OrderActionResult.Status.PLAYER_OFFLINE, null);
+        }
+        if (!tryAcquireOrderOperation(orderId)) {
+            return new OrderActionResult(OrderActionResult.Status.BUSY, null);
+        }
+        try {
+            UUID ownerId = player.getUniqueId();
+            PlayerDataStore.PlayerData data = playerDataStore.getOrCreate(ownerId);
+            PlayerDataStore.OrderEntry order = findOrderById(data, orderId);
+            if (order == null) {
+                return new OrderActionResult(OrderActionResult.Status.NOT_FOUND, null);
+            }
+            if (order.isCancelled()) {
+                return new OrderActionResult(OrderActionResult.Status.ALREADY_CANCELLED, null);
+            }
+            double refund = getRemainingOrderFunds(order);
+            if (!refundRemainingOrderFunds(ownerId, order)) {
+                return new OrderActionResult(OrderActionResult.Status.ECONOMY_ERROR, null);
+            }
+            order.setCancelled(true);
+            OrderSnapshot snapshot = OrderSnapshots.of(ownerId, order);
+            boolean closed = order.getAmountClaimable() <= 0 && data.getOrders().remove(order);
+            playerDataStore.saveUrgent(ownerId);
+            appendOrderEvent(ownerId, "order-cancelled", order, TextFormat.placeholders("refund", refund));
+            manager.plugin.getServer().getPluginManager().callEvent(
+                new OrderCancelledEvent(snapshot, ownerId, OrderCancelledEvent.Cause.OWNER, refund));
+            if (closed) {
+                manager.plugin.getServer().getPluginManager().callEvent(
+                    new OrderClosedEvent(snapshot, ownerId, OrderClosedEvent.Reason.CANCELLED));
+            }
+            sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
+            manager.messages().send(player, "orders.cancelled");
+            manager.fileLogger().info("Player " + player.getName() + " cancelled order " + orderId
+                + " with refund $" + formatCompactAmount(refund) + ".");
+            sendOrderCancelledWebhook(player, order, refund);
+            manager.playSound(player, ORDER_CANCELLED_SOUND);
+            return new OrderActionResult(OrderActionResult.Status.SUCCESS, snapshot);
+        } finally {
+            releaseOrderOperation(orderId);
+        }
+    }
+
     void handleOrderCancellation(
         Player player,
         PlayerDataStore.PlayerData playerData,
@@ -573,52 +639,23 @@ final class OrdersMenuDeliverySupport {
         PlayerDataStore.OrderEntry selectedOrder
     ) {
         String orderId = selectedOrder.getOrderId();
-        if (!tryAcquireOrderOperation(orderId)) {
-            sendErrorActionbar(player, manager.messages().get("actionbar.order-busy"));
-            openManageOrderMenu(player, viewState.manageOrderIndex);
+        OrderActionResult result = cancelOrder(player, orderId);
+        if (!result.successful()) {
+            sendErrorActionbar(player, manager.messages().get(result.status() == OrderActionResult.Status.ECONOMY_ERROR
+                ? "actionbar.economy-error" : result.status() == OrderActionResult.Status.BUSY
+                ? "actionbar.order-busy" : "actionbar.action-unavailable"));
+            if (result.status() == OrderActionResult.Status.NOT_FOUND) openYourOrdersMenu(player);
+            else openManageOrderMenu(player, viewState.manageOrderIndex);
             return;
         }
-
-        try {
-            playerData = playerDataStore.getOrCreate(player.getUniqueId());
-            selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
-            if (selectedOrder == null) {
-                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
-                openYourOrdersMenu(player);
-                return;
-            }
-            if (selectedOrder.isCancelled()) {
-                sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
-                openManageOrderMenu(player, viewState.manageOrderIndex);
-                return;
-            }
-
-            double refundedAmount = getRemainingOrderFunds(selectedOrder);
-            if (!refundRemainingOrderFunds(player.getUniqueId(), selectedOrder)) {
-                sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
-                return;
-            }
-
-            selectedOrder.setCancelled(true);
-            sendErrorActionbar(player, manager.messages().get("actionbar.order-cancelled"));
-            manager.messages().send(player, "orders.cancelled");
-            appendOrderEvent(player.getUniqueId(), "order-cancelled", selectedOrder,
-                TextFormat.placeholders("refund", refundedAmount));
-            manager.fileLogger().info(
-                "Player " + player.getName() + " cancelled order " + selectedOrder.getOrderId()
-                    + " with refund $" + formatCompactAmount(refundedAmount) + "."
-            );
-            boolean removed = removeOrderIfCompleted(playerData, viewState);
-            playerDataStore.saveUrgent(player.getUniqueId());
-            sendOrderCancelledWebhook(player, selectedOrder, refundedAmount);
-            manager.playSound(player, ORDER_CANCELLED_SOUND);
-            if (removed) {
-                openYourOrdersMenu(player);
-                return;
-            }
+        PlayerDataStore.PlayerData current = playerDataStore.getOrCreate(player.getUniqueId());
+        if (findOrderById(current, orderId) == null) {
+            viewState.manageOrderIndex = -1;
+            viewState.manageOrderId = null;
+            clearClaimSession(viewState);
+            openYourOrdersMenu(player);
+        } else {
             openManageOrderMenu(player, viewState.manageOrderIndex);
-        } finally {
-            releaseOrderOperation(orderId);
         }
     }
 
@@ -652,11 +689,17 @@ final class OrdersMenuDeliverySupport {
                 return;
             }
 
-            String ownerName = resolvePlayerName(target.ownerId());
+            String ownerName = target.order().getNpcName() == null
+                ? resolvePlayerName(target.ownerId()) : target.order().getNpcName();
             String orderName = formatOrderDisplayName(target.order());
             playerDataStore.saveUrgent(target.ownerId());
             appendOrderEvent(target.ownerId(), "order-deleted-admin", target.order(),
                 TextFormat.placeholders("actor", player.getName(), "refund", remainingFunds));
+            OrderSnapshot deletedSnapshot = OrderSnapshots.of(target.ownerId(), target.order());
+            manager.plugin.getServer().getPluginManager().callEvent(
+                new OrderDeletedByAdminEvent(deletedSnapshot, player.getUniqueId(), remainingFunds));
+            manager.plugin.getServer().getPluginManager().callEvent(
+                new OrderClosedEvent(deletedSnapshot, player.getUniqueId(), OrderClosedEvent.Reason.ADMIN_DELETED));
             manager.fileLogger().info(
                 "Admin " + player.getName() + " deleted order " + target.order().getOrderId()
                     + " owned by " + ownerName
@@ -715,12 +758,20 @@ final class OrdersMenuDeliverySupport {
             }
 
             target.order().setCancelled(true);
+            boolean closed = target.order().getAmountClaimable() <= 0
+                && ownerData.getOrders().remove(target.order());
             playerDataStore.saveUrgent(target.ownerId());
 
-            String ownerName = resolvePlayerName(target.ownerId());
+            String ownerName = target.order().getNpcName() == null
+                ? resolvePlayerName(target.ownerId()) : target.order().getNpcName();
             String orderName = formatOrderDisplayName(target.order());
             appendOrderEvent(target.ownerId(), "order-cancelled-admin", target.order(),
                 TextFormat.placeholders("actor", player.getName(), "refund", remainingFunds));
+            OrderSnapshot cancelledSnapshot = OrderSnapshots.of(target.ownerId(), target.order());
+            manager.plugin.getServer().getPluginManager().callEvent(new OrderCancelledEvent(
+                cancelledSnapshot, player.getUniqueId(),
+                OrderCancelledEvent.Cause.ADMIN, remainingFunds));
+            if (closed) publishClosed(cancelledSnapshot, player.getUniqueId());
             manager.fileLogger().info(
                 "Admin " + player.getName() + " cancelled order " + target.order().getOrderId()
                     + " owned by " + ownerName
@@ -909,6 +960,7 @@ final class OrdersMenuDeliverySupport {
     }
 
     double getRemainingOrderFunds(PlayerDataStore.OrderEntry order) {
+        if (order.getNpcName() != null) return 0D;
         return Math.max(0D, order.getTotalCost() - order.getAmountPaid());
     }
 
@@ -1106,6 +1158,10 @@ final class OrdersMenuDeliverySupport {
             playerDataStore.saveUrgent(player.getUniqueId());
             appendOrderEvent(player.getUniqueId(), "order-claimed-drop", selectedOrder,
                 TextFormat.placeholders("amount", droppedAmount));
+            OrderSnapshot claimedSnapshot = OrderSnapshots.of(player.getUniqueId(), selectedOrder);
+            manager.plugin.getServer().getPluginManager().callEvent(new OrderItemsClaimedEvent(
+                claimedSnapshot, player.getUniqueId(), droppedAmount, OrderItemsClaimedEvent.Method.DROP));
+            if (removed) publishClosed(claimedSnapshot, player.getUniqueId());
             sendOrderClaimedWebhook(player, selectedOrder, droppedAmount, "Drop Page");
             manager.playSound(player, ORDER_CLAIMED_DROP_SOUND);
             dropClaimStacksWithDelay(player, stacksToDrop);
@@ -1225,11 +1281,13 @@ final class OrdersMenuDeliverySupport {
 
         try {
             PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
-            if (resolveSelectedOrder(playerData, viewState, orderId) == null) {
+            PlayerDataStore.OrderEntry selectedOrder = resolveSelectedOrder(playerData, viewState, orderId);
+            if (selectedOrder == null) {
                 return false;
             }
             boolean removed = removeOrderIfCompleted(playerData, viewState);
             playerDataStore.save(playerId);
+            if (removed) publishClosed(OrderSnapshots.of(playerId, selectedOrder), playerId);
             return removed;
         } finally {
             releaseOrderOperation(orderId);
@@ -1278,15 +1336,25 @@ final class OrdersMenuDeliverySupport {
         return true;
     }
 
-    boolean removeCompletedOrders(PlayerDataStore.PlayerData playerData) {
-        int originalSize = playerData.getOrders().size();
+    List<PlayerDataStore.OrderEntry> removeCompletedOrders(PlayerDataStore.PlayerData playerData) {
+        List<PlayerDataStore.OrderEntry> removed = new ArrayList<>();
         playerData.getOrders().removeIf(order -> {
             boolean noClaimable = order.getAmountClaimable() <= 0;
             boolean completedNormally = order.getAmountDelivered() >= order.getAmountOrdered() && noClaimable;
             boolean completedAfterCancel = order.isCancelled() && noClaimable;
-            return completedNormally || completedAfterCancel;
+            if (completedNormally || completedAfterCancel) {
+                removed.add(order);
+                return true;
+            }
+            return false;
         });
-        return playerData.getOrders().size() != originalSize;
+        return removed;
+    }
+
+    void publishClosed(OrderSnapshot snapshot, UUID actorId) {
+        OrderClosedEvent.Reason reason = snapshot.cancelled()
+            ? OrderClosedEvent.Reason.CANCELLED : OrderClosedEvent.Reason.FILLED_AND_CLAIMED;
+        manager.plugin.getServer().getPluginManager().callEvent(new OrderClosedEvent(snapshot, actorId, reason));
     }
 
     PlayerDataStore.OrderEntry findOrderById(PlayerDataStore.PlayerData playerData, String orderId) {

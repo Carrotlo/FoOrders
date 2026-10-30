@@ -5,6 +5,12 @@ import me.foesio.core.gui.EntryBrowserClick;
 import me.foesio.core.gui.EntryBrowserHolder;
 import me.foesio.core.gui.EntryBrowserMenus;
 import me.foesio.core.sound.FoEditorSounds;
+import me.foesio.foOrders.api.OrderActionResult;
+import me.foesio.foOrders.api.OrderQuote;
+import me.foesio.foOrders.api.OrderRequest;
+import me.foesio.foOrders.api.OrderSnapshot;
+import me.foesio.foOrders.api.event.OrderBeforeCreateEvent;
+import me.foesio.foOrders.api.event.OrderCreatedEvent;
 import me.foesio.foOrders.storage.CustomItemStore;
 import me.foesio.foOrders.storage.HistoryDataStore;
 import me.foesio.foOrders.storage.PlayerDataStore;
@@ -21,10 +27,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 import static me.foesio.foOrders.OrdersMenuManager.*;
 
 final class OrdersMenuActionSupport {
+    private static final Pattern NPC_NAME = Pattern.compile("[A-Za-z0-9 _.-]{1,32}");
     private final OrdersMenuManager manager;
     private final OrdersMenuInteractionSupport interaction;
     private final OrdersMenuDeliverySupport deliverySupport;
@@ -765,7 +775,7 @@ final class OrdersMenuActionSupport {
             try {
                 customItemStore.save(saveId, template, draft.allowOrderEnchants());
                 manager.invalidateItemSelectCaches();
-            } catch (IllegalArgumentException exception) {
+            } catch (IllegalArgumentException | IllegalStateException exception) {
                 manager.editorSounds().error(player);
                 manager.messages().send(player, "custom-items.save-failed", PluginMessages.placeholders("error", exception.getMessage()));
                 return;
@@ -1107,124 +1117,220 @@ final class OrdersMenuActionSupport {
         openEnchantSelectMenu(player, false);
     }
 
+    OrderQuote quote(Player owner, OrderRequest request) {
+        if (owner == null || !owner.isOnline()) {
+            return new OrderQuote(OrderQuote.Status.PLAYER_OFFLINE, null, 0, 0, 0, 0, 0);
+        }
+        int current = playerDataStore.getPlayerOrdersSnapshot(owner.getUniqueId()).size();
+        int maximum = getMaxOrdersForPlayer(owner);
+        if (!owner.hasPermission("foorders.use")) {
+            return new OrderQuote(OrderQuote.Status.NO_PERMISSION, null, current, maximum, 0, 0, 0);
+        }
+        return quoteRequest(request, current, maximum, owner);
+    }
+
+    private OrderQuote quoteRequest(OrderRequest request, int current, int maximum, Player owner) {
+        if (request == null || request.amount() <= 0 || request.pricePerItem() <= 0
+            || !Double.isFinite(request.pricePerItem())) {
+            return new OrderQuote(OrderQuote.Status.INVALID_REQUEST, null, current, maximum, 0, 0, 0);
+        }
+        CustomItemStore.CustomItemDefinition custom = request.customItemId() == null
+            ? null : customItemStore.get(request.customItemId());
+        if (request.customItemId() != null && custom == null) {
+            return new OrderQuote(OrderQuote.Status.ITEM_UNAVAILABLE, null, current, maximum, 0, 0, 0);
+        }
+        Material material = custom == null ? request.material() : custom.template().getType();
+        if (material == null || material == Material.AIR || !material.isItem()) {
+            return new OrderQuote(OrderQuote.Status.INVALID_REQUEST, null, current, maximum, 0, 0, 0);
+        }
+        Map<String, Integer> enchantments = sanitizeDraftEnchantments(
+            custom == null ? null : custom.id(), material, request.enchantments());
+        OrderRequest effective = new OrderRequest(custom == null ? null : custom.id(), material,
+            enchantments, request.amount(), request.pricePerItem());
+        if (custom == null && material == Material.ENCHANTED_BOOK && enchantments.isEmpty()) {
+            return new OrderQuote(OrderQuote.Status.INVALID_REQUEST, effective, current, maximum, 0, 0, 0);
+        }
+        if (custom == null && isOrderBlacklisted(material, enchantments)) {
+            return new OrderQuote(OrderQuote.Status.BLACKLISTED, effective, current, maximum, 0, 0, 0);
+        }
+        if (owner != null && current >= maximum) {
+            return new OrderQuote(OrderQuote.Status.ORDER_LIMIT, effective, current, maximum, 0, 0, 0);
+        }
+        double subtotal = request.amount() * request.pricePerItem();
+        double tax = manager.calculateOrderTax(subtotal);
+        double total = manager.calculateOrderCreationCost(subtotal);
+        if (subtotal <= 0 || total <= 0 || !Double.isFinite(subtotal) || !Double.isFinite(total)) {
+            return new OrderQuote(OrderQuote.Status.INVALID_REQUEST, effective, current, maximum, 0, 0, 0);
+        }
+        if (!hasEconomyProvider()) {
+            return new OrderQuote(OrderQuote.Status.ECONOMY_UNAVAILABLE, effective, current, maximum,
+                subtotal, tax, total);
+        }
+        if (owner != null && !hasEconomyBalance(owner, total)) {
+            return new OrderQuote(OrderQuote.Status.INSUFFICIENT_FUNDS, effective, current, maximum,
+                subtotal, tax, total);
+        }
+        return new OrderQuote(OrderQuote.Status.ELIGIBLE, effective, current, maximum, subtotal, tax, total);
+    }
+
+    OrderActionResult createNpcOrder(String npcListingName, OrderRequest request) {
+        if (npcListingName == null || !NPC_NAME.matcher(npcListingName.trim()).matches()) {
+            return new OrderActionResult(OrderActionResult.Status.INVALID_NPC_NAME, null);
+        }
+        String name = npcListingName.trim();
+        UUID ownerId = UUID.nameUUIDFromBytes(("foorders:npc:" + name.toLowerCase(Locale.ROOT))
+            .getBytes(StandardCharsets.UTF_8));
+        if (!manager.activeCreateOwners.add(ownerId)) {
+            return new OrderActionResult(OrderActionResult.Status.BUSY, null);
+        }
+        try {
+            OrderQuote quote = quoteRequest(request, 0, 0, null);
+            if (!quote.eligible()) {
+                return new OrderActionResult(OrderActionResult.Status.valueOf(quote.status().name()), null);
+            }
+            // NPC orders use the normal item rules; their creation has no tax or Vault withdrawal.
+            OrderQuote freeQuote = new OrderQuote(OrderQuote.Status.ELIGIBLE, quote.effectiveRequest(),
+                0, 0, quote.subtotal(), 0, 0);
+            OrderBeforeCreateEvent before = new OrderBeforeCreateEvent(ownerId, freeQuote.effectiveRequest(), freeQuote, name);
+            manager.plugin.getServer().getPluginManager().callEvent(before);
+            if (before.isCancelled()) {
+                return new OrderActionResult(OrderActionResult.Status.CANCELLED_BY_EVENT, null);
+            }
+            OrderQuote checked = quoteRequest(quote.effectiveRequest(), 0, 0, null);
+            if (!checked.eligible()) {
+                return new OrderActionResult(OrderActionResult.Status.valueOf(checked.status().name()), null);
+            }
+            OrderRequest effective = checked.effectiveRequest();
+            PlayerDataStore.OrderEntry order = new PlayerDataStore.OrderEntry(
+                UUID.randomUUID().toString(), effective.customItemId(), effective.material().name(),
+                effective.enchantments(), effective.amount(), 0, 0, effective.pricePerItem(),
+                0, false, System.currentTimeMillis());
+            order.setNpcName(name);
+            playerDataStore.getOrCreate(ownerId).getOrders().add(order);
+            playerDataStore.saveUrgent(ownerId);
+            appendOrderEvent(ownerId, "order-created", order, TextFormat.placeholders(
+                "amount", order.getAmountOrdered(), "price", order.getPricePerItem(),
+                "subtotal", checked.subtotal(), "tax", 0, "total", 0));
+            OrderSnapshot snapshot = OrderSnapshots.of(ownerId, order);
+            manager.plugin.getServer().getPluginManager().callEvent(new OrderCreatedEvent(snapshot, null, 0, 0));
+            manager.fileLogger().info("NPC " + name + " created order " + order.getOrderId()
+                + " for " + order.getAmountOrdered() + "x " + formatOrderDisplayName(order)
+                + " at $" + order.getPricePerItem() + " each; no account was charged.");
+            return new OrderActionResult(OrderActionResult.Status.SUCCESS, snapshot);
+        } finally {
+            manager.activeCreateOwners.remove(ownerId);
+        }
+    }
+
+    OrderActionResult createOrder(Player owner, OrderRequest request) {
+        if (owner == null || !owner.isOnline()) {
+            return new OrderActionResult(OrderActionResult.Status.PLAYER_OFFLINE, null);
+        }
+        UUID ownerId = owner.getUniqueId();
+        if (!manager.activeCreateOwners.add(ownerId)) {
+            return new OrderActionResult(OrderActionResult.Status.BUSY, null);
+        }
+        try {
+            OrderQuote quote = quote(owner, request);
+            if (!quote.eligible()) {
+                return new OrderActionResult(OrderActionResult.Status.valueOf(quote.status().name()), null);
+            }
+            OrderBeforeCreateEvent before = new OrderBeforeCreateEvent(ownerId, quote.effectiveRequest(), quote);
+            manager.plugin.getServer().getPluginManager().callEvent(before);
+            if (before.isCancelled()) {
+                return new OrderActionResult(OrderActionResult.Status.CANCELLED_BY_EVENT, null);
+            }
+            OrderQuote checked = quote(owner, quote.effectiveRequest());
+            if (!checked.eligible()) {
+                return new OrderActionResult(OrderActionResult.Status.valueOf(checked.status().name()), null);
+            }
+            if (!withdrawEconomy(owner, checked.total())) {
+                return new OrderActionResult(OrderActionResult.Status.ECONOMY_ERROR, null);
+            }
+            OrderRequest effective = checked.effectiveRequest();
+            PlayerDataStore.OrderEntry order = new PlayerDataStore.OrderEntry(
+                UUID.randomUUID().toString(), effective.customItemId(), effective.material().name(),
+                effective.enchantments(), effective.amount(), 0, 0, effective.pricePerItem(),
+                0, false, System.currentTimeMillis());
+            PlayerDataStore.PlayerData data = playerDataStore.getOrCreate(ownerId);
+            data.getOrders().add(order);
+            playerDataStore.saveUrgent(ownerId);
+            appendOrderEvent(ownerId, "order-created", order, TextFormat.placeholders(
+                "amount", order.getAmountOrdered(), "price", order.getPricePerItem(),
+                "subtotal", checked.subtotal(), "tax", checked.tax(), "total", checked.total()));
+            OrderSnapshot snapshot = OrderSnapshots.of(ownerId, order);
+            manager.plugin.getServer().getPluginManager().callEvent(
+                new OrderCreatedEvent(snapshot, ownerId, checked.tax(), checked.total()));
+            manager.fileLogger().info("Player " + owner.getName() + " created order " + order.getOrderId()
+                + " for " + formatCompactAmount(order.getAmountOrdered()) + "x " + formatOrderDisplayName(order)
+                + " at $" + formatCompactAmount(order.getPricePerItem()) + " each with $"
+                + formatCompactAmount(checked.tax()) + " tax and $" + formatCompactAmount(checked.total()) + " charged.");
+            sendOrderCreatedWebhook(owner, order, checked.subtotal());
+            announceCreatedOrderInChat(owner, order, checked.subtotal());
+            return new OrderActionResult(OrderActionResult.Status.SUCCESS, snapshot);
+        } finally {
+            manager.activeCreateOwners.remove(ownerId);
+        }
+    }
+
     void confirmNewOrder(Player player) {
         UUID playerId = player.getUniqueId();
         MenuViewState viewState = menuStates.computeIfAbsent(playerId, ignored -> new MenuViewState());
-        if (viewState.newOrderConfirmLocked) {
-            return;
-        }
+        if (viewState.newOrderConfirmLocked) return;
         viewState.newOrderConfirmLocked = true;
-        NewOrderDraft draft = viewState.getOrCreateDraft();
-        CustomItemStore.CustomItemDefinition customSelection = resolveCustomItemDefinition(draft.customItemId());
-        if (draft.customItemId() != null && customSelection == null) {
+        try {
+            NewOrderDraft draft = viewState.getOrCreateDraft();
+            CustomItemStore.CustomItemDefinition custom = resolveCustomItemDefinition(draft.customItemId());
+            Material material = custom == null ? resolveMaterial(draft.materialName()) : custom.template().getType();
+            Map<String, Integer> sanitized = sanitizeDraftEnchantments(draft.customItemId(), material, draft.enchantLevels());
+            if (!sanitized.equals(draft.enchantLevels())) {
+                draft = draft.withEnchantLevels(sanitized);
+                viewState.draft = draft;
+            }
+            OrderActionResult result = createOrder(player, new OrderRequest(
+                draft.customItemId(), material, draft.enchantLevels(), draft.amount(), draft.pricePerItem()));
+            if (result.successful()) {
+                manager.playSound(player, ORDER_CREATED_SOUND);
+                viewState.draft = NewOrderDraft.defaults();
+                openYourOrdersMenu(player);
+                return;
+            }
             manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.custom-item-missing"));
-            viewState.draft = draft.withSelection(null, Material.STONE.name()).withEnchantLevels(Map.of());
-            openNewOrderMenu(player);
-            return;
+            switch (result.status()) {
+                case ORDER_LIMIT -> {
+                    manager.messages().send(player, "orders.max-orders", PluginMessages.placeholders(
+                        "amount", formatCompactAmount(getMaxOrdersForPlayer(player))));
+                    openYourOrdersMenu(player);
+                }
+                case ITEM_UNAVAILABLE -> {
+                    sendErrorActionbar(player, manager.messages().get("actionbar.custom-item-missing"));
+                    viewState.draft = draft.withSelection(null, Material.STONE.name()).withEnchantLevels(Map.of());
+                    openNewOrderMenu(player);
+                }
+                case BLACKLISTED -> {
+                    sendErrorActionbar(player, manager.messages().get("actionbar.order-blacklisted"));
+                    openNewOrderMenu(player);
+                }
+                case INSUFFICIENT_FUNDS -> {
+                    sendErrorActionbar(player, manager.messages().get("actionbar.not-enough-money"));
+                    openNewOrderMenu(player);
+                }
+                case ECONOMY_UNAVAILABLE, ECONOMY_ERROR -> {
+                    sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
+                    openNewOrderMenu(player);
+                }
+                case INVALID_REQUEST -> {
+                    sendErrorActionbar(player, manager.messages().get(
+                        material == Material.ENCHANTED_BOOK ? "actionbar.enchant-required" : "actionbar.invalid-price"));
+                    openNewOrderMenu(player);
+                }
+                default -> {
+                    sendErrorActionbar(player, manager.messages().get("actionbar.action-unavailable"));
+                    openNewOrderMenu(player);
+                }
+            }
+        } finally {
+            viewState.newOrderConfirmLocked = false;
         }
-
-        Material orderMaterial = customSelection == null
-            ? resolveMaterial(draft.materialName())
-            : customSelection.template().getType();
-        Map<String, Integer> sanitizedEnchantments =
-            sanitizeDraftEnchantments(draft.customItemId(), orderMaterial, draft.enchantLevels());
-        if (!sanitizedEnchantments.equals(draft.enchantLevels())) {
-            draft = draft.withEnchantLevels(sanitizedEnchantments);
-            viewState.draft = draft;
-        }
-        int playerMaxOrders = getMaxOrdersForPlayer(player);
-
-        PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
-        if (playerData.getOrders().size() >= playerMaxOrders) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            manager.messages().send(player, "orders.max-orders", PluginMessages.placeholders("amount", formatCompactAmount(playerMaxOrders)));
-            openYourOrdersMenu(player);
-            return;
-        }
-
-        if (customSelection == null && orderMaterial == Material.ENCHANTED_BOOK && sanitizedEnchantments.isEmpty()) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.enchant-required"));
-            openNewOrderMenu(player);
-            return;
-        }
-
-        if (customSelection == null && isOrderBlacklisted(orderMaterial, sanitizedEnchantments)) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.order-blacklisted"));
-            openNewOrderMenu(player);
-            return;
-        }
-
-        if (!hasEconomyProvider()) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
-            openNewOrderMenu(player);
-            return;
-        }
-
-        double subtotal = draft.amount() * draft.pricePerItem();
-        if (subtotal <= 0 || !Double.isFinite(subtotal)) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.invalid-price"));
-            openNewOrderMenu(player);
-            return;
-        }
-        double taxAmount = manager.calculateOrderTax(subtotal);
-        double totalCost = manager.calculateOrderCreationCost(subtotal);
-        if (totalCost <= 0 || !Double.isFinite(totalCost)) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.invalid-price"));
-            openNewOrderMenu(player);
-            return;
-        }
-
-        if (!hasEconomyBalance(player, totalCost)) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.not-enough-money"));
-            openNewOrderMenu(player);
-            return;
-        }
-
-        if (!withdrawEconomy(player, totalCost)) {
-            manager.playSound(player, GUI_ERROR_SOUND);
-            sendErrorActionbar(player, manager.messages().get("actionbar.economy-error"));
-            openNewOrderMenu(player);
-            return;
-        }
-
-        PlayerDataStore.OrderEntry orderEntry = new PlayerDataStore.OrderEntry(
-            UUID.randomUUID().toString(),
-            customSelection == null ? null : customSelection.id(),
-            orderMaterial.name(),
-            sanitizedEnchantments,
-            draft.amount(),
-            0,
-            0,
-            draft.pricePerItem(),
-            0,
-            false,
-            System.currentTimeMillis()
-        );
-        playerData.getOrders().add(orderEntry);
-        playerDataStore.saveUrgent(playerId);
-        appendOrderEvent(playerId, "order-created", orderEntry, TextFormat.placeholders(
-            "amount", orderEntry.getAmountOrdered(), "price", orderEntry.getPricePerItem(),
-            "subtotal", subtotal, "tax", taxAmount, "total", totalCost));
-        manager.fileLogger().info(
-            "Player " + player.getName() + " created order " + orderEntry.getOrderId()
-                + " for " + formatCompactAmount(orderEntry.getAmountOrdered())
-                + "x " + formatOrderDisplayName(orderEntry)
-                + " at $" + formatCompactAmount(orderEntry.getPricePerItem())
-                + " each with $" + formatCompactAmount(taxAmount)
-                + " tax and $" + formatCompactAmount(totalCost) + " charged."
-        );
-        sendOrderCreatedWebhook(player, orderEntry, subtotal);
-        announceCreatedOrderInChat(player, orderEntry, subtotal);
-        manager.playSound(player, ORDER_CREATED_SOUND);
-
-        viewState.draft = NewOrderDraft.defaults();
-        openYourOrdersMenu(player);
     }
 }

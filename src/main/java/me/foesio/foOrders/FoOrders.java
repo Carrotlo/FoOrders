@@ -16,6 +16,7 @@ import me.foesio.core.sound.FoSoundService;
 import me.foesio.core.update.UpdateNoticeService;
 import me.foesio.foOrders.command.OrderAdminCommand;
 import me.foesio.foOrders.command.OrderCommand;
+import me.foesio.foOrders.api.FoOrdersApi;
 import me.foesio.foOrders.config.GuiConfigManager;
 import me.foesio.foOrders.config.PublicSoundFiles;
 import me.foesio.foOrders.dialog.FoOrdersDialogInputService;
@@ -30,6 +31,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.ServicePriority;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,6 +46,7 @@ public final class FoOrders extends JavaPlugin {
     private static final int BSTATS_PLUGIN_ID = 32420;
 
     private OrdersMenuManager ordersMenuManager;
+    private FoOrdersApiImpl apiService;
     private OrdersPublicGuis publicGuis;
     private PluginMessages messages;
     private GuiConfigManager guiConfigManager;
@@ -234,6 +237,8 @@ public final class FoOrders extends JavaPlugin {
         registerCommand("orderadmin", orderAdminCommand);
 
         ordersMenuManager.initializeOnlinePlayers();
+        apiService = new FoOrdersApiImpl(ordersMenuManager);
+        getServer().getServicesManager().register(FoOrdersApi.class, apiService, this, ServicePriority.Normal);
         fileLogger.info("FoOrders enable completed.");
     }
 
@@ -259,6 +264,8 @@ public final class FoOrders extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        getServer().getServicesManager().unregisterAll(this);
+        apiService = null;
         if (fileLogger != null) {
             fileLogger.info("FoOrders disable started.");
         }

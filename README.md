@@ -71,6 +71,6 @@ Main config areas: `max-order-per-player`, `order-menu-refresh-cooldown-ms`, `or
 <details>
 <summary><strong>Developer API</strong></summary>
 
-This plugin does not expose a public developer API.
+FoOrders exposes order queries and actions, a custom-item catalog, history queries, and order lifecycle events. See [public API source](src/main/java/me/foesio/foOrders/api) for the contract and consumer setup.
 
 </details>

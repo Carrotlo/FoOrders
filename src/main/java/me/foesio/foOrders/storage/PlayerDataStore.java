@@ -51,6 +51,7 @@ public final class PlayerDataStore {
     private final Gson gson;
     private final Map<UUID, PlayerData> cache = new ConcurrentHashMap<>();
     private final Map<UUID, PlayerData> allPlayerDataSnapshot = new ConcurrentHashMap<>();
+    private final Map<String, PlayerOrderRecord> orderIndex = new ConcurrentHashMap<>();
     private final Map<UUID, Object> playerLocks = new ConcurrentHashMap<>();
     private final WriteBehindStore<UUID, PlayerData> writeBehind;
 
@@ -141,6 +142,28 @@ public final class PlayerDataStore {
         return orders;
     }
 
+    /** Returns a copy without creating a new player record. */
+    public List<PlayerOrderRecord> getPlayerOrdersSnapshot(UUID playerId) {
+        PlayerData data = allPlayerDataSnapshot.get(playerId);
+        if (data == null) {
+            return List.of();
+        }
+        List<PlayerOrderRecord> orders = new ArrayList<>(data.getOrders().size());
+        for (OrderEntry order : data.getOrders()) {
+            orders.add(new PlayerOrderRecord(playerId, order.copy()));
+        }
+        return orders;
+    }
+
+    /** Indexed lookup; returns a defensive copy. */
+    public PlayerOrderRecord getOrderSnapshot(String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            return null;
+        }
+        PlayerOrderRecord found = orderIndex.get(orderId);
+        return found == null ? null : new PlayerOrderRecord(found.playerId, found.order.copy());
+    }
+
     private void markDirty(UUID playerId, boolean urgent) {
         PlayerData snapshot = null;
         synchronized (playerLock(playerId)) {
@@ -182,6 +205,7 @@ public final class PlayerDataStore {
 
     private void loadAllPlayerDataSnapshots() {
         allPlayerDataSnapshot.clear();
+        orderIndex.clear();
         try (Connection connection = openConnection()) {
             Map<UUID, PlayerData> loadedData = loadPlayerSettings(connection);
             loadPlayerOrders(connection, loadedData);
@@ -212,7 +236,7 @@ public final class PlayerDataStore {
     private void loadPlayerOrders(Connection connection, Map<UUID, PlayerData> loadedData) throws SQLException {
         try (Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery(
-                 "SELECT owner_uuid, order_id, custom_item_id, material, enchantments_json, amount_ordered, amount_delivered, amount_claimable, price_per_item, amount_paid, cancelled, created_at_epoch_millis " +
+                 "SELECT owner_uuid, order_id, npc_name, custom_item_id, material, enchantments_json, amount_ordered, amount_delivered, amount_claimable, price_per_item, amount_paid, cancelled, created_at_epoch_millis " +
                      "FROM player_orders ORDER BY created_at_epoch_millis ASC, order_id ASC"
              )) {
             while (resultSet.next()) {
@@ -238,7 +262,16 @@ public final class PlayerDataStore {
         if (playerId == null || data == null) {
             return;
         }
-        allPlayerDataSnapshot.put(playerId, data.copy());
+        PlayerData snapshot = data.copy();
+        PlayerData previous = allPlayerDataSnapshot.put(playerId, snapshot);
+        if (previous != null) {
+            for (OrderEntry oldOrder : previous.getOrders()) {
+                orderIndex.remove(oldOrder.getOrderId());
+            }
+        }
+        for (OrderEntry order : snapshot.getOrders()) {
+            orderIndex.put(order.getOrderId(), new PlayerOrderRecord(playerId, order));
+        }
     }
 
     private UUID parsePlayerId(Path path) {
@@ -301,6 +334,7 @@ public final class PlayerDataStore {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     order_id TEXT NOT NULL,
                     owner_uuid TEXT NOT NULL,
+                    npc_name TEXT,
                     custom_item_id TEXT,
                     material TEXT NOT NULL,
                     enchantments_json TEXT NOT NULL DEFAULT '{}',
@@ -315,9 +349,20 @@ public final class PlayerDataStore {
                 )
                 """);
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_player_orders_owner ON player_orders(owner_uuid)");
+            ensureNpcNameColumn(statement);
         } catch (SQLException exception) {
             throw new IllegalStateException("Could not initialize FoOrders SQLite database", exception);
         }
+    }
+
+    static void ensureNpcNameColumn(Statement statement) throws SQLException {
+        boolean hasNpcName = false;
+        try (ResultSet columns = statement.executeQuery("PRAGMA table_info(player_orders)")) {
+            while (columns.next()) {
+                hasNpcName |= "npc_name".equalsIgnoreCase(columns.getString("name"));
+            }
+        }
+        if (!hasNpcName) statement.executeUpdate("ALTER TABLE player_orders ADD COLUMN npc_name TEXT");
     }
 
     private void migrateLegacyJsonIfNeeded() {
@@ -386,7 +431,7 @@ public final class PlayerDataStore {
             }
         }
         try (PreparedStatement statement = connection.prepareStatement(
-            "SELECT order_id, custom_item_id, material, enchantments_json, amount_ordered, amount_delivered, amount_claimable, price_per_item, amount_paid, cancelled, created_at_epoch_millis " +
+            "SELECT order_id, npc_name, custom_item_id, material, enchantments_json, amount_ordered, amount_delivered, amount_claimable, price_per_item, amount_paid, cancelled, created_at_epoch_millis " +
                 "FROM player_orders WHERE owner_uuid = ? ORDER BY created_at_epoch_millis ASC, order_id ASC"
         )) {
             statement.setString(1, playerId.toString());
@@ -443,6 +488,7 @@ public final class PlayerDataStore {
             INSERT INTO player_orders (
                 order_id,
                 owner_uuid,
+                npc_name,
                 custom_item_id,
                 material,
                 enchantments_json,
@@ -453,21 +499,22 @@ public final class PlayerDataStore {
                 amount_paid,
                 cancelled,
                 created_at_epoch_millis
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """)) {
             for (OrderEntry order : data.getOrders()) {
                 statement.setString(1, order.getOrderId());
                 statement.setString(2, playerId.toString());
-                statement.setString(3, order.getCustomItemId());
-                statement.setString(4, order.getMaterial());
-                statement.setString(5, gson.toJson(order.getEnchantments()));
-                statement.setInt(6, order.getAmountOrdered());
-                statement.setInt(7, order.getAmountDelivered());
-                statement.setInt(8, order.getAmountClaimable());
-                statement.setDouble(9, order.getPricePerItem());
-                statement.setDouble(10, order.getAmountPaid());
-                statement.setInt(11, order.isCancelled() ? 1 : 0);
-                statement.setLong(12, order.getCreatedAtEpochMillis());
+                statement.setString(3, order.getNpcName());
+                statement.setString(4, order.getCustomItemId());
+                statement.setString(5, order.getMaterial());
+                statement.setString(6, gson.toJson(order.getEnchantments()));
+                statement.setInt(7, order.getAmountOrdered());
+                statement.setInt(8, order.getAmountDelivered());
+                statement.setInt(9, order.getAmountClaimable());
+                statement.setDouble(10, order.getPricePerItem());
+                statement.setDouble(11, order.getAmountPaid());
+                statement.setInt(12, order.isCancelled() ? 1 : 0);
+                statement.setLong(13, order.getCreatedAtEpochMillis());
                 statement.addBatch();
             }
             statement.executeBatch();
@@ -475,7 +522,7 @@ public final class PlayerDataStore {
     }
 
     private OrderEntry readOrderEntry(ResultSet resultSet) throws SQLException {
-        return new OrderEntry(
+        OrderEntry order = new OrderEntry(
             resultSet.getString("order_id"),
             resultSet.getString("custom_item_id"),
             resultSet.getString("material"),
@@ -488,6 +535,8 @@ public final class PlayerDataStore {
             resultSet.getInt("cancelled") != 0,
             resultSet.getLong("created_at_epoch_millis")
         );
+        order.setNpcName(resultSet.getString("npc_name"));
+        return order;
     }
 
     private Map<String, Integer> parseEnchantments(String rawJson) {
@@ -689,6 +738,7 @@ public final class PlayerDataStore {
     public static final class OrderEntry {
         private String orderId;
         private String customItemId;
+        private String npcName;
         private String material;
         private Map<String, Integer> enchantments;
         private int amountOrdered;
@@ -764,6 +814,14 @@ public final class PlayerDataStore {
             return customItemId;
         }
 
+        public String getNpcName() {
+            return npcName;
+        }
+
+        public void setNpcName(String npcName) {
+            this.npcName = npcName;
+        }
+
         public void setCustomItemId(String customItemId) {
             this.customItemId = customItemId;
         }
@@ -816,6 +874,14 @@ public final class PlayerDataStore {
             this.amountPaid = amountPaid;
         }
 
+        /** Records a validated delivery. Virtual orders consume the items instead of making them claimable. */
+        public boolean recordDelivery(int acceptedAmount, double payout) {
+            amountDelivered += acceptedAmount;
+            if (npcName == null) amountClaimable += acceptedAmount;
+            amountPaid += payout;
+            return npcName != null && amountDelivered >= amountOrdered;
+        }
+
         public boolean isCancelled() {
             return cancelled;
         }
@@ -847,6 +913,10 @@ public final class PlayerDataStore {
                 if (!Objects.equals(originalCustomItemId, customItemId)) {
                     changed = true;
                 }
+            }
+            if (npcName != null && npcName.isBlank()) {
+                npcName = null;
+                changed = true;
             }
             String originalMaterial = material;
             Material resolvedMaterial = Material.matchMaterial(material == null ? "" : material);
@@ -937,7 +1007,7 @@ public final class PlayerDataStore {
         }
 
         private OrderEntry copy() {
-            return new OrderEntry(
+            OrderEntry copy = new OrderEntry(
                 orderId,
                 customItemId,
                 material,
@@ -950,6 +1020,8 @@ public final class PlayerDataStore {
                 cancelled,
                 createdAtEpochMillis
             );
+            copy.npcName = npcName;
+            return copy;
         }
     }
 

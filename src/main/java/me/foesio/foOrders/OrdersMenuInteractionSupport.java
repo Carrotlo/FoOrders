@@ -503,7 +503,7 @@ final class OrdersMenuInteractionSupport {
         return deliverySupport.getSelectedOrder(playerData, viewState);
     }
 
-    boolean removeCompletedOrders(PlayerDataStore.PlayerData playerData) {
+    List<PlayerDataStore.OrderEntry> removeCompletedOrders(PlayerDataStore.PlayerData playerData) {
         return deliverySupport.removeCompletedOrders(playerData);
     }
 

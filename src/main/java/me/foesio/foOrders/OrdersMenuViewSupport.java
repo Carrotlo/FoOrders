@@ -86,7 +86,7 @@ final class OrdersMenuViewSupport {
         return manager.interactionSupport.getMaxOrdersForPlayer(player);
     }
 
-    private boolean removeCompletedOrders(PlayerDataStore.PlayerData playerData) {
+    private List<PlayerDataStore.OrderEntry> removeCompletedOrders(PlayerDataStore.PlayerData playerData) {
         return manager.interactionSupport.removeCompletedOrders(playerData);
     }
 
@@ -668,8 +668,12 @@ final class OrdersMenuViewSupport {
         clearClaimSession(viewState);
         int playerMaxOrders = getMaxOrdersForPlayer(player);
         PlayerDataStore.PlayerData playerData = playerDataStore.getOrCreate(playerId);
-        if (removeCompletedOrders(playerData)) {
+        List<PlayerDataStore.OrderEntry> closedOrders = removeCompletedOrders(playerData);
+        if (!closedOrders.isEmpty()) {
             playerDataStore.save(playerId);
+            for (PlayerDataStore.OrderEntry closed : closedOrders) {
+                manager.interactionSupport.deliverySupport.publishClosed(OrderSnapshots.of(playerId, closed), null);
+            }
         }
 
         List<PlayerDataStore.OrderEntry> playerOrders = playerData.getOrders();
@@ -1166,7 +1170,7 @@ final class OrdersMenuViewSupport {
         viewState.adminTargetOrderId = orderId;
 
         double remainingFunds = getRemainingOrderFunds(order);
-        String ownerName = resolvePlayerName(ownerId);
+        String ownerName = order.getNpcName() == null ? resolvePlayerName(ownerId) : order.getNpcName();
         Inventory menu = createMenu(MenuType.ADMIN_ORDER_ACTIONS, 27, TITLE_ADMIN_ACTIONS);
         putItemIfPresent(menu, ADMIN_PREVIEW_SLOT, createOrderItem(ownerName, order, false));
         putItemIfPresent(menu,
@@ -1780,7 +1784,8 @@ final class OrdersMenuViewSupport {
             }
 
             UUID ownerId = record.getPlayerId();
-            String ownerName = ownerNameCache.computeIfAbsent(ownerId, this::resolvePlayerName);
+            String ownerName = order.getNpcName() == null
+                ? ownerNameCache.computeIfAbsent(ownerId, this::resolvePlayerName) : order.getNpcName();
             if (!searchLower.isBlank()) {
                 String itemSearchable = buildOrderSearchText(order);
                 String ownerSearchable = ownerName.toLowerCase(Locale.ROOT);
